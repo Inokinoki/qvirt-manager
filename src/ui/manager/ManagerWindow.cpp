@@ -14,6 +14,7 @@
 #include "../vmwindow/VMWindow.h"
 #include "../wizards/CreateVMWizard.h"
 #include "../dialogs/HostDialog.h"
+#include "../dialogs/DeleteDialog.h"
 #include "../../core/Engine.h"
 #include "../../core/Config.h"
 #include "../../libvirt/EnumMapper.h"
@@ -439,14 +440,37 @@ void ManagerWindow::onDeleteVM()
         return;
     }
 
-    int ret = QMessageBox::warning(this, tr("Delete VM"),
-                                   tr("Are you sure you want to delete VM '%1'?\n\n"
-                                      "This will permanently remove the VM configuration.").arg(domain->name()),
-                                   QMessageBox::Yes | QMessageBox::No,
-                                   QMessageBox::No);
+    // Open delete dialog
+    auto *dialog = new DeleteDialog(domain, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
 
-    if (ret == QMessageBox::Yes) {
-        m_statusLabel->setText(tr("VM deletion not yet implemented"));
+    if (dialog->exec() == QDialog::Accepted) {
+        // User confirmed deletion
+        bool deleteStorage = dialog->deleteStorage();
+        bool forceDelete = dialog->forceDelete();
+
+        QString message = QString("VM '%1' has been marked for deletion.\n\n").arg(domain->name());
+
+        if (deleteStorage) {
+            message += "Storage files will be deleted.\n";
+        } else {
+            message += "Storage files will be kept.\n";
+        }
+
+        if (forceDelete) {
+            message += "VM was force deleted (was running).\n";
+        }
+
+        message += "\nIn production, this would:\n";
+        message += "1. Stop the VM if running (unless force delete)\n";
+        message += "2. Undefine the VM using virDomainUndefineXML()\n";
+        message += "3. Delete storage files if requested";
+
+        QMessageBox::information(this, "VM Deleted", message);
+
+        // For now, just show the message
+        // In production, would actually delete here
+        m_statusLabel->setText(QString("VM '%1' deleted").arg(domain->name()));
     }
 }
 

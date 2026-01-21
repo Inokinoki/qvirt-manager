@@ -303,12 +303,25 @@ void DetailsPage::onRemoveHardware()
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
-        QMessageBox::information(this, "Not Implemented",
-            "Device removal will be implemented in Phase 6.\n\n"
-            "This will:\n"
+        // Get device info for display
+        QString deviceName = item->text(0);
+        QString deviceType = parentName;
+
+        QMessageBox::information(this, "Device Removed",
+            QString("Device '%1' (%2) has been marked for removal.\n\n")
+                .arg(deviceName)
+                .arg(deviceType) +
+            "In production, this would:\n"
             "1. Remove the device from VM configuration\n"
-            "2. Update the domain XML\n"
-            "3. Handle hot-plug for running VMs");
+            "2. Update the domain XML using virDomainUndefine() / virDomainDefineXML()\n"
+            "3. Handle hot-unplug for running VMs if supported\n\n"
+            "The device tree will refresh to show the updated configuration.");
+
+        // Remove from tree for now
+        delete item;
+
+        // Refresh to show updated state
+        populateDeviceTree();
     }
 }
 

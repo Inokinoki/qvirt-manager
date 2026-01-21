@@ -78,6 +78,7 @@ add_library(qvirt-ui
     ui/dialogs/ConnectionDialog.cpp
     ui/dialogs/AddHardwareDialog.cpp
     ui/dialogs/HostDialog.cpp
+    ui/dialogs/DeleteDialog.cpp
     ui/vmwindow/VMWindow.cpp
     ui/vmwindow/OverviewPage.cpp
     ui/vmwindow/DetailsPage.cpp

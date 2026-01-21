@@ -1,0 +1,64 @@
+# Dockerfile for building QVirt-Manager on Ubuntu
+# Usage: docker build --build-arg UBUNTU_VERSION=22.04 --build-arg QT_VERSION=6 -t qvirt-builder .
+
+ARG UBUNTU_VERSION=22.04
+ARG QT_VERSION=6
+
+FROM ubuntu:${UBUNTU_VERSION} AS builder
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Install basic dependencies
+RUN apt-get update && apt-get install -y \
+    cmake \
+    build-essential \
+    git \
+    pkg-config \
+    libvirt-dev \
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Qt5 dependencies
+RUN if [ "${QT_VERSION}" = "5" ]; then \
+        apt-get update && apt-get install -y \
+        qtbase5-dev \
+        qttools5-dev \
+        qttools5-dev-tools \
+        libqt5uitools5-dev \
+        qtbase5-private-dev \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Install Qt6 dependencies
+RUN if [ "${QT_VERSION}" = "6" ]; then \
+        apt-get update && apt-get install -y \
+        qt6-base-dev \
+        qt6-tools-dev \
+        qt6-tools-dev-tools \
+        qt6-base-private-dev \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Optional dependencies for console viewers
+RUN apt-get update && apt-get install -y \
+    libspice-client-gtk-2.0-dev \
+    libgtk-vnc-2.0-dev \
+    && rm -rf /var/lib/apt/lists/* || true
+
+# Set working directory
+WORKDIR /workspace
+
+# Set Qt path for CMake
+ENV QT_SELECT=qt${QT_VERSION}
+
+# Verify installation
+RUN echo "Ubuntu version: ${UBUNTU_VERSION}" && \
+    echo "Qt version: ${QT_VERSION}" && \
+    cmake --version && \
+    qmake --version || qmake6 --version || true
+
+# Default command
+CMD ["/bin/bash"]

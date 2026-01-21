@@ -29,6 +29,7 @@ add_library(qvirt-libvirt
     libvirt/StoragePool.cpp
     libvirt/NodeDevice.cpp
     libvirt/EnumMapper.cpp
+    libvirt/Guest.cpp
 )
 
 target_include_directories(qvirt-libvirt

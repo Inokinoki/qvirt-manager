@@ -45,12 +45,36 @@ target_link_libraries(qvirt-libvirt
         ${LIBVIRT_LIBRARIES}
 )
 
+# Device library
+add_library(qvirt-devices
+    devices/Device.cpp
+    devices/DiskDevice.cpp
+    devices/NetworkDevice.cpp
+    devices/ControllerDevice.cpp
+    devices/InputDevice.cpp
+)
+
+target_include_directories(qvirt-devices
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(qvirt-devices
+    PUBLIC
+        qvirt-core
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Widgets
+)
+
 # UI components
 add_library(qvirt-ui
     ui/manager/ManagerWindow.cpp
     ui/models/ConnectionListModel.cpp
     ui/models/VMListModel.cpp
     ui/dialogs/ConnectionDialog.cpp
+    ui/vmwindow/VMWindow.cpp
+    ui/vmwindow/OverviewPage.cpp
+    ui/vmwindow/DetailsPage.cpp
 )
 
 target_include_directories(qvirt-ui

@@ -11,6 +11,7 @@
 
 #include "ManagerWindow.h"
 #include "../dialogs/ConnectionDialog.h"
+#include "../vmwindow/VMWindow.h"
 #include "../../core/Engine.h"
 #include "../../core/Config.h"
 #include "../../libvirt/EnumMapper.h"
@@ -271,7 +272,22 @@ void ManagerWindow::connectSignals()
     connect(m_btnResume, &QPushButton::clicked, this, &ManagerWindow::onVMResume);
     connect(m_btnDeleteVM, &QPushButton::clicked, this, &ManagerWindow::onDeleteVM);
     connect(m_btnOpenConsole, &QPushButton::clicked, [this]() {
-        m_statusLabel->setText(tr("Console viewer not yet implemented"));
+        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+        if (!domain) {
+            return;
+        }
+        auto *vmWindow = new VMWindow(domain, this);
+        vmWindow->show();
+    });
+
+    // VM list double-click to open details
+    connect(m_vmList, &QTableView::doubleClicked, [this](const QModelIndex &index) {
+        Domain *domain = m_vmModel->domainAt(index.row());
+        if (!domain) {
+            return;
+        }
+        auto *vmWindow = new VMWindow(domain, this);
+        vmWindow->show();
     });
 
     // Toolbar actions
@@ -283,7 +299,13 @@ void ManagerWindow::connectSignals()
     connect(m_actionResume, &QAction::triggered, this, &ManagerWindow::onVMResume);
     connect(m_actionDeleteVM, &QAction::triggered, this, &ManagerWindow::onDeleteVM);
     connect(m_actionOpenConsole, &QAction::triggered, [this]() {
-        m_statusLabel->setText(tr("Console viewer not yet implemented"));
+        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+        if (!domain) {
+            return;
+        }
+        // Open VM details window
+        auto *vmWindow = new VMWindow(domain, this);
+        vmWindow->show();
     });
 }
 

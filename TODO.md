@@ -161,41 +161,47 @@ Create **qvirt-manager**, a C++ Qt-based replacement for the Python GTK+ virt-ma
 
 ---
 
-## Phase 5: VM Creation Wizard 📋 TODO
+## Phase 5: VM Creation Wizard 🔄 IN PROGRESS
 
-**Status**: Pending
+**Status**: In Progress (UI Complete, VM Creation Backend Pending)
 **Deliverable**: Full-featured VM creation wizard
 
 ### Tasks
 
-- [ ] Create wizard framework
-- [ ] Step 1: Name and OS selection
-- [ ] Step 2: Installation media (ISO, URL, import, PXE, container)
-- [ ] Step 3: Memory and CPU configuration
-- [ ] Step 4: Storage configuration (create, browse, select)
-- [ ] Step 5: Network configuration
-- [ ] Step 6: Final summary and installation
+- [x] Create wizard framework
+- [x] Step 1: Name and OS selection
+- [x] Step 2: Installation media (ISO, URL, import, PXE, container)
+- [x] Step 3: Memory and CPU configuration
+- [x] Step 4: Storage configuration (create, browse, select)
+- [x] Step 5: Network configuration
+- [x] Step 6: Final summary and installation
 - [ ] Integrate with OS database (libosinfo)
 - [ ] Custom XML option for advanced users
+- [ ] Implement actual VM creation backend
 
-### Files to Create
+### Files Created
 
-- `src/ui/wizards/CreateVMWizard.h/cpp` - Main wizard
-- `src/utils/OSDB.h/cpp` - OS detection database
-- `src/ui/widgets/StorageBrowser.h/cpp` - Storage pool/volume browser
-- `src/ui/widgets/NetworkList.h/cpp` - Network selection widget
-- `src/devices/ControllerDevice.h/cpp` - Controller device support
+- `src/ui/wizards/CreateVMWizard.h/cpp` - Main wizard (1,279 lines)
 
-### Key Features
+### Key Features Implemented
 
-- Multi-step wizard with navigation
-- OS type/version selection with auto-detection
+- Multi-step wizard with navigation using QWizard
+- OS type/version selection with Linux/Windows/UNIX options
 - Installation source: ISO, URL, PXE, import, container boot
-- Storage: Create new disk, use existing, browse storage pools
-- Network: Virtual network, bridge, macvtap, direct
-- Custom CPU, memory settings
-- Firmware selection (BIOS/UEFI)
-- Architecture selection (x86_64, ARM, etc.)
+- Storage: Create new disk, use existing, no storage
+- Network: Virtual network, bridge, macvtap, direct, isolated
+- Custom CPU, memory settings with spin boxes
+- Disk format (qcow2, raw, vmdk, vdi) and bus selection
+- Summary page showing all configuration
+
+### Remaining Work
+
+- Connect wizard's Finish button to actual VM XML generation
+- Define VM using virDomainDefineXML()
+- Start VM installation
+- OS auto-detection from ISO media
+- Storage pool browser (Phase 7)
+- Advanced options (firmware, chipset, architecture)
 
 ---
 

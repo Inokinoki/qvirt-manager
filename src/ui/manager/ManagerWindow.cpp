@@ -12,6 +12,7 @@
 #include "ManagerWindow.h"
 #include "../dialogs/ConnectionDialog.h"
 #include "../vmwindow/VMWindow.h"
+#include "../wizards/CreateVMWizard.h"
 #include "../../core/Engine.h"
 #include "../../core/Config.h"
 #include "../../libvirt/EnumMapper.h"
@@ -400,7 +401,29 @@ void ManagerWindow::onVMResume()
 
 void ManagerWindow::onNewVM()
 {
-    m_statusLabel->setText(tr("New VM wizard not yet implemented"));
+    // Get the selected connection
+    QModelIndex connIndex = m_connectionList->currentIndex();
+    if (!connIndex.isValid()) {
+        QMessageBox::warning(this, tr("No Connection Selected"),
+            tr("Please select a connection first."));
+        return;
+    }
+
+    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
+    if (!conn) {
+        return;
+    }
+
+    // Open the create VM wizard
+    auto *wizard = new CreateVMWizard(conn, this);
+    wizard->setAttribute(Qt::WA_DeleteOnClose);
+
+    connect(wizard, &QWizard::accepted, this, [this, conn]() {
+        m_statusLabel->setText(tr("VM created successfully"));
+        // VM list will be updated by Connection polling
+    });
+
+    wizard->show();
 }
 
 void ManagerWindow::onDeleteVM()

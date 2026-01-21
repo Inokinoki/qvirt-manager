@@ -75,6 +75,7 @@ add_library(qvirt-ui
     ui/vmwindow/VMWindow.cpp
     ui/vmwindow/OverviewPage.cpp
     ui/vmwindow/DetailsPage.cpp
+    ui/wizards/CreateVMWizard.cpp
 )
 
 target_include_directories(qvirt-ui

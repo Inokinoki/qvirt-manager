@@ -53,6 +53,9 @@ add_library(qvirt-devices
     devices/NetworkDevice.cpp
     devices/ControllerDevice.cpp
     devices/InputDevice.cpp
+    devices/GraphicsDevice.cpp
+    devices/VideoDevice.cpp
+    devices/SoundDevice.cpp
 )
 
 target_include_directories(qvirt-devices

@@ -13,6 +13,7 @@
 #include "../dialogs/ConnectionDialog.h"
 #include "../vmwindow/VMWindow.h"
 #include "../wizards/CreateVMWizard.h"
+#include "../dialogs/HostDialog.h"
 #include "../../core/Engine.h"
 #include "../../core/Config.h"
 #include "../../libvirt/EnumMapper.h"
@@ -223,6 +224,11 @@ void ManagerWindow::setupMenus()
     QAction *actionRefresh = m_menuView->addAction(tr("Refresh"));
     actionRefresh->setShortcut(QKeySequence::Refresh);
     connect(actionRefresh, &QAction::triggered, this, &ManagerWindow::refresh);
+
+    m_menuView->addSeparator();
+
+    QAction *actionHostDetails = m_menuView->addAction(tr("Host Details"));
+    connect(actionHostDetails, &QAction::triggered, this, &ManagerWindow::showHostDetails);
 
     // VM menu
     m_menuVM = menuBar()->addMenu(tr("&VM"));
@@ -479,6 +485,27 @@ void ManagerWindow::openConnectionDialog()
 void ManagerWindow::showPreferences()
 {
     m_statusLabel->setText(tr("Preferences not yet implemented"));
+}
+
+void ManagerWindow::showHostDetails()
+{
+    // Get selected connection
+    QModelIndex connIndex = m_connectionList->currentIndex();
+    if (!connIndex.isValid()) {
+        QMessageBox::warning(this, tr("No Connection Selected"),
+            tr("Please select a connection first."));
+        return;
+    }
+
+    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
+    if (!conn) {
+        return;
+    }
+
+    // Open host details dialog
+    auto *dialog = new HostDialog(conn, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
 }
 
 void ManagerWindow::updateVMControls()

@@ -63,6 +63,7 @@ private slots:
     void onConnectionSelectionChanged();
     void openConnectionDialog();
     void showPreferences();
+    void showHostDetails();
     void refresh();
 
 private:

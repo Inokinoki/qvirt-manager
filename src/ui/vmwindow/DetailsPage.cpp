@@ -10,6 +10,7 @@
  */
 
 #include "DetailsPage.h"
+#include "../dialogs/AddHardwareDialog.h"
 #include "../../core/Error.h"
 
 #include <QHeaderView>
@@ -251,15 +252,27 @@ void DetailsPage::onDeviceSelected(QTreeWidgetItem *item, int column)
 
 void DetailsPage::onAddHardware()
 {
-    QMessageBox::information(this, "Add Hardware",
-        "The Add Hardware wizard will be implemented in Phase 6.\n\n"
-        "This will allow you to add:\n"
-        "• Disk devices\n"
-        "• Network interfaces\n"
-        "• USB controllers\n"
-        "• Graphics cards\n"
-        "• Sound devices\n"
-        "• And more...");
+    auto *dialog = new AddHardwareDialog(m_domain, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+    if (dialog->exec() == QDialog::Accepted) {
+        Device *device = dialog->getCreatedDevice();
+        if (device) {
+            // Add device to domain
+            // For now, just show a message with the device XML
+            QString xml = device->toXML();
+            QMessageBox::information(this, "Device Added",
+                "Device created successfully!\n\n" +
+                QString("Type: %1\n").arg(device->deviceTypeName()) +
+                QString("Description: %1\n\n").arg(device->description()) +
+                "XML:\n" + xml.left(500) + "...\n\n"
+                "Note: Device will be added to VM configuration in the next iteration.\n"
+                "This requires virDomainAttachDevice() or domain XML update.");
+
+            // Refresh the device tree
+            populateDeviceTree();
+        }
+    }
 }
 
 void DetailsPage::onRemoveHardware()

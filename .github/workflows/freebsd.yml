@@ -198,12 +198,12 @@ jobs:
 
     - name: Build package
       uses: vmactions/freebsd-vm@v1
-        with:
-          copyback: true
-          prepare: |
-            pkg install -y cmake qt6-qtbase libvirt
-          run: |
-            mkdir -p build
+      with:
+        copyback: true
+        prepare: |
+          pkg install -y cmake qt6-qtbase libvirt
+        run: |
+          mkdir -p build
             cd build
             cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 ..
             make -j$(sysctl -n hw.ncpu)

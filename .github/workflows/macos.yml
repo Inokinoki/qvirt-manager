@@ -93,6 +93,7 @@ jobs:
         host: 'mac'
         target: 'desktop'
         arch: 'clang_64'
+        modules: 'qtserialport'
 
     - name: Install libvirt
       run: brew install libvirt pkg-config
@@ -131,6 +132,7 @@ jobs:
         host: 'mac'
         target: 'desktop'
         arch: 'clang_64'
+        modules: 'qtserialport'
 
     - name: Install libvirt
       run: brew install libvirt pkg-config
@@ -164,6 +166,7 @@ jobs:
         version: '6.6.1'
         host: 'mac'
         target: 'desktop'
+        modules: 'qtserialport'
 
     - name: Install libvirt
       run: brew install libvirt pkg-config
@@ -233,6 +236,7 @@ jobs:
         version: '6.6.1'
         host: 'mac'
         target: 'desktop'
+        modules: 'qtserialport'
 
     - name: Install libvirt
       run: brew install libvirt pkg-config

@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
 
 #include <QMessageBox>
 #include <QFormLayout>
+#include <QVariant>
 
 namespace QVirt {
 
@@ -85,7 +86,7 @@ void DeleteDialog::setupUI()
 
     m_btnCancel = new QPushButton("Cancel");
     m_btnDelete = new QPushButton("Delete");
-    m_btnDelete->setProperty("class", "danger"); // For styling if needed
+    m_btnDelete->setProperty("class", QVariant("danger")); // For styling if needed
 
     buttonLayout->addWidget(m_btnCancel);
     buttonLayout->addWidget(m_btnDelete);

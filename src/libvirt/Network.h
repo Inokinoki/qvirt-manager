@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,21 +29,48 @@ class Network : public BaseObject
     Q_OBJECT
 
 public:
+    enum NetworkState {
+        StateInactive = 0,
+        StateRunning = 1
+    };
+
+    enum ForwardMode {
+        ForwardNAT = 0,
+        ForwardRoute = 1,
+        ForwardBridge = 2,
+        ForwardPrivate = 3,
+        ForwardVEPA = 4,
+        ForwardPassthrough = 5,
+        ForwardHostdev = 6
+    };
+
     ~Network() override;
 
     QString name() const { return m_name; }
     QString uuid() const { return m_uuid; }
     bool isActive() const { return m_active; }
+    NetworkState state() const { return m_state; }
+    ForwardMode forwardMode() const { return m_forwardMode; }
+
+    // Network configuration
+    QString bridgeName() const { return m_bridgeName; }
+    QString ipAddress() const { return m_ipAddress; }
+    QString netmask() const { return m_netmask; }
+    QString dhcpStart() const { return m_dhcpStart; }
+    QString dhcpEnd() const { return m_dhcpEnd; }
+    bool dhcpEnabled() const { return m_dhcpEnabled; }
 
     bool start();
     bool stop();
     bool undefine();
+    void updateInfo();
 
 signals:
     void stateChanged();
 
 private:
     Network(Connection *conn, virNetworkPtr network);
+    void parseXML(const QString &xml);
 
     Connection *m_connection;
     virNetworkPtr m_network;
@@ -51,6 +78,15 @@ private:
     QString m_name;
     QString m_uuid;
     bool m_active;
+    NetworkState m_state;
+    ForwardMode m_forwardMode;
+
+    QString m_bridgeName;
+    QString m_ipAddress;
+    QString m_netmask;
+    QString m_dhcpStart;
+    QString m_dhcpEnd;
+    bool m_dhcpEnabled;
 
     friend class Connection;
 };

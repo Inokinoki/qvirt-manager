@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -77,7 +77,7 @@ public:
     ~DiskDevice() override = default;
 
     // Device interface
-    DeviceType deviceType() const override { return DeviceType::Disk; }
+    ::QVirt::Device::DeviceType deviceType() const override { return ::QVirt::Device::DeviceType::Disk; }
     QString deviceTypeName() const override { return QStringLiteral("disk"); }
     QString description() const override;
     QString toXML() const override;
@@ -114,7 +114,7 @@ public:
     bool shareable() const { return m_shareable; }
     void setShareable(bool shareable) { m_shareable = shareable; }
 
-    qint64容量() const { return m_capacity; }
+    qint64 capacity() const { return m_capacity; }
     void setCapacity(qint64 bytes) { m_capacity = bytes; }
 
     DeviceAddress address() const { return m_address; }

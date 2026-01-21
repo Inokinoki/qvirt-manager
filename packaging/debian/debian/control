@@ -1,0 +1,49 @@
+Source: qvirt-manager
+Section: admin
+Priority: optional
+Maintainer: Inoki <veyx.shaw@gmail.com>
+Build-Depends: cmake (>= 3.16),
+                 debhelper-compat (= 13),
+                 qtbase5-dev (>= 5.15.0),
+                 qttools5-dev,
+                 libvirt-dev (>= 4.5.0),
+                 pkg-config,
+                 qtbase5-private-dev
+
+Standards-Version: 4.5.1
+Homepage: https://github.com/qvirt-manager/qvirt-manager
+Vcs-Git: https://github.com/qvirt-manager/qvirt-manager.git
+
+Package: qvirt-manager
+Architecture: any
+Depends: qtbase5-dev (>= 5.15.0),
+         libvirt0 (>= 4.5.0),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Recommends: spice-gtk3,
+          gtk-vnc-2.0,
+          libosinfo-1.0-0
+Description: Qt-based Virtual Machine Manager
+ QVirt-Manager is a Qt-based virtual machine manager, providing a
+ graphical interface for managing libvirt VMs. It is a modern C++
+ replacement for virt-manager with improved performance and a
+ cleaner user interface.
+ .
+ Features:
+  - VM lifecycle management (start, stop, reboot, pause, save)
+  - VM creation wizard with OS type detection
+  - Hardware management (add/edit/remove devices)
+  - Storage pool and volume management
+  - Virtual network configuration
+  - VM snapshot management
+  - Console viewing (VNC and SPICE)
+  - Multi-connection support
+
+Package: qvirt-manager-dev
+Section: libdevel
+Architecture: any
+Depends: qvirt-manager (= ${binary:Version}),
+         ${misc:Depends}
+Description: Development files for QVirt-Manager
+ The qvirt-manager-dev package contains libraries and header files for
+ developing applications that use QVirt-Manager.

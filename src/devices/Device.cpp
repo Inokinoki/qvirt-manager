@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,12 +40,15 @@ DeviceAddress::DeviceAddress() = default;
 DeviceAddress::DeviceAddress(const DeviceAddress &other)
     : type(other.type)
     , domain(other.domain)
-    , bus(other.bus)
+    , pciBus(other.pciBus)
     , slot(other.slot)
     , function(other.function)
     , controller(other.controller)
+    , driveBus(other.driveBus)
     , target(other.target)
     , unit(other.unit)
+    , virtioBus(other.virtioBus)
+    , port(other.port)
     , iobase(other.iobase)
     , irq(other.irq)
     , reg(other.reg)
@@ -71,21 +74,21 @@ QString DeviceAddress::toString() const
     case AddressType::PCI:
         return QString("pci:%1:%2:%3.%4")
             .arg(domain)
-            .arg(bus)
+            .arg(pciBus)
             .arg(slot)
             .arg(function);
 
     case AddressType::Drive:
         return QString("drive:%1:%2:%3:%4")
             .arg(controller)
-            .arg(bus)
+            .arg(driveBus)
             .arg(target)
             .arg(unit);
 
     case AddressType::VirtioSerial:
         return QString("virtio-serial:%1:%2:%3")
             .arg(controller)
-            .arg(bus)
+            .arg(virtioBus)
             .arg(port);
 
     case AddressType::CCID:
@@ -131,7 +134,7 @@ bool DeviceAddress::fromString(const QString &str)
         // Parse pci:domain:bus:slot.function
         if (parts.size() >= 4) {
             domain = parts[1].toUInt();
-            bus = parts[2].toUInt();
+            pciBus = parts[2].toUInt();
             QStringList slotFunc = parts[3].split('.');
             if (slotFunc.size() >= 2) {
                 slot = slotFunc[0].toUInt();
@@ -143,7 +146,7 @@ bool DeviceAddress::fromString(const QString &str)
         // Parse drive:controller:bus:target:unit
         if (parts.size() >= 5) {
             controller = parts[1].toInt();
-            bus = parts[2].toInt();
+            driveBus = parts[2].toInt();
             target = parts[3].toInt();
             unit = parts[4].toInt();
         }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- CPU chip -->
+  <rect x="4" y="4" width="8" height="8" rx="1" fill="#78909c" stroke="#546e7a" stroke-width="1"/>
+  <rect x="5" y="5" width="6" height="6" fill="#cfd8dc"/>
+  <!-- CPU text -->
+  <text x="8" y="9.5" font-family="Arial, sans-serif" font-size="5" font-weight="bold" fill="#546e7a" text-anchor="middle">CPU</text>
+  <!-- Pins -->
+  <line x1="6" y1="4" x2="6" y2="2" stroke="#546e7a" stroke-width="1"/>
+  <line x1="8" y1="4" x2="8" y2="2" stroke="#546e7a" stroke-width="1"/>
+  <line x1="10" y1="4" x2="10" y2="2" stroke="#546e7a" stroke-width="1"/>
+  <line x1="6" y1="12" x2="6" y2="14" stroke="#546e7a" stroke-width="1"/>
+  <line x1="8" y1="12" x2="8" y2="14" stroke="#546e7a" stroke-width="1"/>
+  <line x1="10" y1="12" x2="10" y2="14" stroke="#546e7a" stroke-width="1"/>
+  <line x1="4" y1="6" x2="2" y2="6" stroke="#546e7a" stroke-width="1"/>
+  <line x1="4" y1="8" x2="2" y2="8" stroke="#546e7a" stroke-width="1"/>
+  <line x1="4" y1="10" x2="2" y2="10" stroke="#546e7a" stroke-width="1"/>
+  <line x1="12" y1="6" x2="14" y2="6" stroke="#546e7a" stroke-width="1"/>
+  <line x1="12" y1="8" x2="14" y2="8" stroke="#546e7a" stroke-width="1"/>
+  <line x1="12" y1="10" x2="14" y2="10" stroke="#546e7a" stroke-width="1"/>
+</svg>

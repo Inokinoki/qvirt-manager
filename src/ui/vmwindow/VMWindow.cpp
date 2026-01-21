@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,12 +12,21 @@
 #include "VMWindow.h"
 #include "OverviewPage.h"
 #include "DetailsPage.h"
+#include "ConsolePage.h"
+#include "SnapshotsPage.h"
 
 #include "../../core/Engine.h"
 #include "../../core/Error.h"
 
+#include "../dialogs/CloneDialog.h"
+#include "../dialogs/DeleteDialog.h"
+#include "../dialogs/AddHardwareDialog.h"
+#include "../../devices/Device.h"
+
 #include <QMessageBox>
 #include <QCloseEvent>
+#include <QStatusBar>
+#include <QMenuBar>
 
 namespace QVirt {
 
@@ -56,25 +65,14 @@ void VMWindow::setupUI()
     // Create pages
     m_overviewPage = new OverviewPage(m_domain, this);
     m_detailsPage = new DetailsPage(m_domain, this);
-    m_consolePage = new QWidget(this);
-    m_snapshotsPage = new QWidget(this);
+    m_consolePage = new ConsolePage(m_domain, this);
+    m_snapshotsPage = new SnapshotsPage(m_domain, this);
 
     // Add pages to tab widget
     m_tabWidget->addTab(m_overviewPage, "Overview");
     m_tabWidget->addTab(m_detailsPage, "Details");
     m_tabWidget->addTab(m_consolePage, "Console");
     m_tabWidget->addTab(m_snapshotsPage, "Snapshots");
-
-    // Setup placeholder pages
-    auto *consoleLayout = new QVBoxLayout(m_consolePage);
-    auto *consoleLabel = new QLabel("Console viewer not yet implemented", m_consolePage);
-    consoleLabel->setAlignment(Qt::AlignCenter);
-    consoleLayout->addWidget(consoleLabel);
-
-    auto *snapshotLayout = new QVBoxLayout(m_snapshotsPage);
-    auto *snapshotLabel = new QLabel("Snapshot management not yet implemented", m_snapshotsPage);
-    snapshotLabel->setAlignment(Qt::AlignCenter);
-    snapshotLayout->addWidget(snapshotLabel);
 
     // Status bar
     m_statusLabel = new QLabel(this);
@@ -182,7 +180,7 @@ void VMWindow::setupMenuBar()
         QMessageBox::about(this, "About QVirt-Manager",
             "QVirt-Manager v1.0.0\n\n"
             "A Qt-based virtual machine manager\n\n"
-            "Copyright (C) 2025-2026 The QVirt-Manager Developers");
+            "Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>");
     });
 }
 
@@ -291,21 +289,21 @@ void VMWindow::onDomainStatsUpdated()
 void VMWindow::onStartClicked()
 {
     if (!m_domain->start()) {
-        Error::showDialog(this, "Failed to start VM", m_domain->name());
+        Error::showError("Failed to start VM", m_domain->name());
     }
 }
 
 void VMWindow::onStopClicked()
 {
     if (!m_domain->shutdown()) {
-        Error::showDialog(this, "Failed to shutdown VM", m_domain->name());
+        Error::showError("Failed to shutdown VM", m_domain->name());
     }
 }
 
 void VMWindow::onRebootClicked()
 {
     if (!m_domain->reboot()) {
-        Error::showDialog(this, "Failed to reboot VM", m_domain->name());
+        Error::showError("Failed to reboot VM", m_domain->name());
     }
 }
 
@@ -327,7 +325,7 @@ void VMWindow::onForceOffClicked()
 
     if (reply == QMessageBox::Yes) {
         if (!m_domain->destroy()) {
-            Error::showDialog(this, "Failed to force off VM", m_domain->name());
+            Error::showError("Failed to force off VM", m_domain->name());
         }
     }
 }
@@ -344,12 +342,35 @@ void VMWindow::onRestoreSavedClicked()
 
 void VMWindow::onCloneVM()
 {
-    QMessageBox::information(this, "Not Implemented", "Clone VM functionality will be implemented in Phase 8");
+    CloneDialog dialog(m_domain, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // Clone VM logic would go here
+        // For now, just show a message with the clone parameters
+        QString info = QString("Clone Configuration:\n")
+            + QString("  Source: %1\n").arg(m_domain->name())
+            + QString("  Clone Name: %1\n").arg(dialog.cloneName())
+            + QString("  Clone Storage: %1\n").arg(dialog.cloneStorage() ? "Yes" : "No")
+            + QString("  Generate MACs: %1\n").arg(dialog.generateMACs() ? "Yes" : "No");
+
+        QMessageBox::information(this, "Clone VM (Placeholder)",
+            info + "\n\nClone functionality requires libvirt XML manipulation. "
+            "This dialog shows the clone configuration interface.");
+    }
 }
 
 void VMWindow::onDeleteVM()
 {
-    QMessageBox::information(this, "Not Implemented", "Delete VM functionality will be implemented in Phase 8");
+    DeleteDialog dialog(m_domain, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // Delete VM logic would go here
+        QMessageBox::information(this, "Delete VM (Placeholder)",
+            QString("VM '%1' would be deleted here.\n\n")
+                .arg(m_domain->name()) +
+            "Delete functionality requires:\n"
+            "- Undefining the VM from libvirt\n"
+            "- Optionally deleting storage volumes\n"
+            "- Cleaning up related resources");
+    }
 }
 
 void VMWindow::onMigrateVM()
@@ -359,7 +380,20 @@ void VMWindow::onMigrateVM()
 
 void VMWindow::onAddHardware()
 {
-    QMessageBox::information(this, "Not Implemented", "Add Hardware wizard will be implemented in Phase 6");
+    AddHardwareDialog dialog(m_domain, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        Device *device = dialog.getCreatedDevice();
+        if (device) {
+            QMessageBox::information(this, "Add Hardware (Placeholder)",
+                QString("Device created: %1\n\n")
+                    .arg(device->deviceTypeName()) +
+                "Device attachment requires:\n"
+                "- Modifying VM XML\n"
+                "- Attaching device to running VM (if hotpluggable)\n"
+                "- Persisting the configuration");
+            delete device;
+        }
+    }
 }
 
 void VMWindow::onRefresh()

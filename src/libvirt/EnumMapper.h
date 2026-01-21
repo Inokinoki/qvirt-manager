@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,14 +12,16 @@
 #ifndef QVIRT_LIBVIRT_ENUMMAPPER_H
 #define QVIRT_LIBVIRT_ENUMMAPPER_H
 
+#include "Domain.h"
+#include "Network.h"
+#include "StoragePool.h"
+#include "StorageVolume.h"
+
 #include <QString>
 
 #include <libvirt/libvirt.h>
 
 namespace QVirt {
-
-// Forward declaration to avoid circular dependency
-class Domain;
 
 /**
  * @brief Converts libvirt enums to/from strings
@@ -31,7 +33,7 @@ class EnumMapper
 {
 public:
     // Domain state
-    static QString domainStateToString(virDomainState state);
+    static QString stateToString(virDomainState state);
     static virDomainState stringToDomainState(const QString &str);
 
     // Domain lifecycle actions
@@ -42,6 +44,17 @@ public:
     static QString diskBusTypeToString(int type);
     static QString networkDeviceTypeToString(int type);
 
+    // Storage Pool
+    static QString poolStateToString(StoragePool::PoolState state);
+    static QString poolTypeToString(StoragePool::PoolType type);
+
+    // Storage Volume
+    static QString volumeTypeToString(StorageVolume::VolumeType type);
+
+    // Network
+    static QString networkStateToString(Network::NetworkState state);
+    static QString forwardModeToString(Network::ForwardMode mode);
+
     // Error handling
     static QString virErrorToString(int code);
 
@@ -50,6 +63,7 @@ public:
     static QString domainStatusToString(int state);  // Generic overload for Domain::State
     static QString networkStatusToString(virNetworkPtr network);
     static QString storagePoolStatusToString(virStoragePoolPtr pool);
+    static QString stateToString(int state);  // Generic overload for Domain::State
 
 private:
     EnumMapper() = default;

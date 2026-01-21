@@ -1,0 +1,39 @@
+{
+    "app-id": "com.virtmanager.QVirt",
+    "runtime": "org.kde.Platform",
+    "runtime-version": "5.15-22.08",
+    "sdk": "org.kde.Sdk",
+    "command": "qvirt-manager",
+    "finish-args": [
+        "--share=ipc",
+        "--socket=x11",
+        "--socket=wayland",
+        "--device=kvm",
+        "--share=network",
+        "--filesystem=home:rw",
+        "--talk-name=org.libvirt",
+        "--system-talk-name=org.libvirt"
+    ],
+    "modules": [
+        {
+            "name": "qvirt-manager",
+            "buildsystem": "cmake-ninja",
+            "config-opts": [
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DQT_VERSION_MAJOR=5"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": "."
+                }
+            ],
+            "post-install": [
+                "install -Dm644 packaging/flatpak/com.virtmanager.QVirt.metainfo.xml /app/share/metainfo/com.virtmanager.QVirt.metainfo.xml",
+                "install -Dm644 packaging/flatpak/com.virtmanager.QVirt.desktop /app/share/applications/com.virtmanager.QVirt.desktop",
+                "install -Dm644 packaging/icons/qvirt-manager.svg /app/share/icons/hicolor/scalable/apps/com.virtmanager.QVirt.svg"
+            ]
+        }
+    ],
+    "name": "qvirt-manager"
+}

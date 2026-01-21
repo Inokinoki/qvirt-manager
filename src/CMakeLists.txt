@@ -25,8 +25,10 @@ target_link_libraries(qvirt-core
 add_library(qvirt-libvirt
     libvirt/Connection.cpp
     libvirt/Domain.cpp
+    libvirt/DomainSnapshot.cpp
     libvirt/Network.cpp
     libvirt/StoragePool.cpp
+    libvirt/StorageVolume.cpp
     libvirt/NodeDevice.cpp
     libvirt/EnumMapper.cpp
     libvirt/Guest.cpp
@@ -41,8 +43,10 @@ target_include_directories(qvirt-libvirt
 target_link_libraries(qvirt-libvirt
     PUBLIC
         qvirt-core
+        qvirt-devices
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Xml
         ${LIBVIRT_LIBRARIES}
 )
 
@@ -79,9 +83,19 @@ add_library(qvirt-ui
     ui/dialogs/AddHardwareDialog.cpp
     ui/dialogs/HostDialog.cpp
     ui/dialogs/DeleteDialog.cpp
+    ui/dialogs/StoragePoolDialog.cpp
+    ui/dialogs/NetworkDialog.cpp
+    ui/dialogs/SnapshotDialog.cpp
+    ui/dialogs/CloneDialog.cpp
+    ui/dialogs/PreferencesDialog.cpp
+    ui/dialogs/XMLEditor.cpp
+    ui/widgets/GraphWidget.cpp
+    ui/widgets/ContextMenu.cpp
     ui/vmwindow/VMWindow.cpp
     ui/vmwindow/OverviewPage.cpp
     ui/vmwindow/DetailsPage.cpp
+    ui/vmwindow/ConsolePage.cpp
+    ui/vmwindow/SnapshotsPage.cpp
     ui/wizards/CreateVMWizard.cpp
 )
 
@@ -104,6 +118,7 @@ target_link_libraries(qvirt-ui
 # Main executable
 add_executable(qvirt-manager
     main.cpp
+    ../resources/qvirt.qrc
 )
 
 target_include_directories(qvirt-manager
@@ -121,6 +136,7 @@ target_link_libraries(qvirt-manager
     PRIVATE
         qvirt-core
         qvirt-libvirt
+        qvirt-devices
         qvirt-ui
         ${LIBVIRT_LIBRARIES}
 )

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- RAM sticks -->
+  <rect x="2" y="6" width="4" height="6" rx="0.5" fill="#7b1fa2" stroke="#4a148c" stroke-width="1"/>
+  <rect x="6" y="6" width="4" height="6" rx="0.5" fill="#7b1fa2" stroke="#4a148c" stroke-width="1"/>
+  <rect x="10" y="6" width="4" height="6" rx="0.5" fill="#7b1fa2" stroke="#4a148c" stroke-width="1"/>
+  <!-- Memory chips -->
+  <rect x="2.5" y="7" width="3" height="2" fill="#ab47bc"/>
+  <rect x="6.5" y="7" width="3" height="2" fill="#ab47bc"/>
+  <rect x="10.5" y="7" width="3" height="2" fill="#ab47bc"/>
+  <rect x="2.5" y="9.5" width="3" height="2" fill="#ab47bc"/>
+  <rect x="6.5" y="9.5" width="3" height="2" fill="#ab47bc"/>
+  <rect x="10.5" y="9.5" width="3" height="2" fill="#ab47bc"/>
+  <!-- Contacts -->
+  <line x1="3" y1="12" x2="3" y2="13" stroke="#4a148c" stroke-width="0.5"/>
+  <line x1="4" y1="12" x2="4" y2="13" stroke="#4a148c" stroke-width="0.5"/>
+  <line x1="5" y1="12" x2="5" y2="13" stroke="#4a148c" stroke-width="0.5"/>
+</svg>

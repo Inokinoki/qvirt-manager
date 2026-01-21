@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -11,6 +11,11 @@
 
 #include "ManagerWindow.h"
 #include "../dialogs/ConnectionDialog.h"
+#include "../dialogs/StoragePoolDialog.h"
+#include "../dialogs/NetworkDialog.h"
+#include "../dialogs/PreferencesDialog.h"
+#include "../widgets/ContextMenu.h"
+#include "../widgets/GraphWidget.h"
 #include "../vmwindow/VMWindow.h"
 #include "../wizards/CreateVMWizard.h"
 #include "../dialogs/HostDialog.h"
@@ -21,6 +26,8 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QFile>
+#include <QApplication>
 
 namespace QVirt {
 
@@ -30,10 +37,12 @@ ManagerWindow::ManagerWindow(QWidget *parent)
     setWindowTitle(tr("QVirt Manager"));
     resize(1024, 768);
 
+    applyStylesheet();
     setupMenus();
     setupToolbar();
     setupUI();
     connectSignals();
+    setupKeyboardShortcuts();
 
     // Auto-connect to default URI if configured
     Config *config = Config::instance();
@@ -100,6 +109,38 @@ void ManagerWindow::setupUI()
     m_vmList->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_vmList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_vmList->setAlternatingRowColors(true);
+    m_vmList->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_vmList, &QTableView::customContextMenuRequested,
+            this, [this](const QPoint &pos) {
+                Domain *domain = m_vmModel->domainAt(m_vmList->indexAt(pos).row());
+                if (domain) {
+                    VMContextMenu contextMenu(this);
+                    QMenu *menu = contextMenu.createMenu(this, domain);
+
+                    connect(&contextMenu, &VMContextMenu::startRequested, this, &ManagerWindow::onVMStarted);
+                    connect(&contextMenu, &VMContextMenu::stopRequested, this, &ManagerWindow::onVMStopped);
+                    connect(&contextMenu, &VMContextMenu::rebootRequested, this, &ManagerWindow::onVMRebooted);
+                    connect(&contextMenu, &VMContextMenu::pauseRequested, this, &ManagerWindow::onVMPaused);
+                    connect(&contextMenu, &VMContextMenu::deleteRequested, this, &ManagerWindow::onDeleteVM);
+                    connect(&contextMenu, &VMContextMenu::openConsoleRequested, this, [this]() {
+                        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+                        if (domain) {
+                            auto *vmWindow = new VMWindow(domain, this);
+                            vmWindow->show();
+                        }
+                    });
+                    connect(&contextMenu, &VMContextMenu::viewDetailsRequested, this, [this]() {
+                        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+                        if (domain) {
+                            auto *vmWindow = new VMWindow(domain, this);
+                            vmWindow->show();
+                        }
+                    });
+
+                    menu->exec(m_vmList->viewport()->mapToGlobal(pos));
+                    delete menu;
+                }
+            });
 
     // Set column widths
     m_vmList->setColumnWidth(0, 250);  // Name
@@ -219,6 +260,13 @@ void ManagerWindow::setupMenus()
     actionQuit->setShortcut(QKeySequence::Quit);
     connect(actionQuit, &QAction::triggered, this, &QMainWindow::close);
 
+    // Edit menu
+    m_menuEdit = menuBar()->addMenu(tr("&Edit"));
+
+    QAction *actionPreferences = m_menuEdit->addAction(tr("Preferences..."));
+    actionPreferences->setShortcut(QKeySequence::Preferences);
+    connect(actionPreferences, &QAction::triggered, this, &ManagerWindow::showPreferences);
+
     // View menu
     m_menuView = menuBar()->addMenu(tr("&View"));
 
@@ -230,6 +278,14 @@ void ManagerWindow::setupMenus()
 
     QAction *actionHostDetails = m_menuView->addAction(tr("Host Details"));
     connect(actionHostDetails, &QAction::triggered, this, &ManagerWindow::showHostDetails);
+
+    m_menuView->addSeparator();
+
+    QAction *actionStoragePools = m_menuView->addAction(tr("Storage Pools"));
+    connect(actionStoragePools, &QAction::triggered, this, &ManagerWindow::showStoragePools);
+
+    QAction *actionNetworks = m_menuView->addAction(tr("Virtual Networks"));
+    connect(actionNetworks, &QAction::triggered, this, &ManagerWindow::showNetworks);
 
     // VM menu
     m_menuVM = menuBar()->addMenu(tr("&VM"));
@@ -257,7 +313,7 @@ void ManagerWindow::setupMenus()
                               "<p>Virtual Machine Manager</p>"
                               "<p>Version 1.0.0</p>"
                               "<p>A Qt-based replacement for virt-manager</p>"
-                              "<p>Copyright (C) 2025-2026 The QVirt-Manager Developers</p>"));
+                              "<p>Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com></p>"));
     });
 }
 
@@ -508,7 +564,8 @@ void ManagerWindow::openConnectionDialog()
 
 void ManagerWindow::showPreferences()
 {
-    m_statusLabel->setText(tr("Preferences not yet implemented"));
+    PreferencesDialog dialog(this);
+    dialog.exec();
 }
 
 void ManagerWindow::showHostDetails()
@@ -564,6 +621,73 @@ void ManagerWindow::refresh()
 {
     m_vmModel->refresh();
     m_statusLabel->setText(tr("Refreshed"));
+}
+
+void ManagerWindow::showStoragePools()
+{
+    // Get selected connection
+    QModelIndex connIndex = m_connectionList->currentIndex();
+    if (!connIndex.isValid()) {
+        QMessageBox::warning(this, tr("No Connection Selected"),
+            tr("Please select a connection first."));
+        return;
+    }
+
+    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
+    if (!conn) {
+        return;
+    }
+
+    // Open storage pool dialog
+    auto *dialog = new StoragePoolDialog(conn, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+}
+
+void ManagerWindow::showNetworks()
+{
+    // Get selected connection
+    QModelIndex connIndex = m_connectionList->currentIndex();
+    if (!connIndex.isValid()) {
+        QMessageBox::warning(this, tr("No Connection Selected"),
+            tr("Please select a connection first."));
+        return;
+    }
+
+    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
+    if (!conn) {
+        return;
+    }
+
+    // Open network dialog
+    auto *dialog = new NetworkDialog(conn, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+}
+
+void ManagerWindow::setupKeyboardShortcuts()
+{
+    m_keyboardShortcuts = new KeyboardShortcuts(this);
+    m_keyboardShortcuts->setupShortcuts(this);
+}
+
+void ManagerWindow::applyStylesheet()
+{
+    // Try to load stylesheet from resources
+    QFile file(":/styles/default.qss");
+    if (file.open(QIODevice::ReadOnly)) {
+        QString style = QString::fromUtf8(file.readAll());
+        qApp->setStyleSheet(style);
+        file.close();
+    } else {
+        // Fallback: try loading from file system
+        QFile fsFile("resources/styles/default.qss");
+        if (fsFile.open(QIODevice::ReadOnly)) {
+            QString style = QString::fromUtf8(fsFile.readAll());
+            qApp->setStyleSheet(style);
+            fsFile.close();
+        }
+    }
 }
 
 } // namespace QVirt

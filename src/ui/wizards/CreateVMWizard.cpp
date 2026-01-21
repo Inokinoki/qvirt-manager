@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,6 +69,12 @@ void CreateVMWizard::onCurrentIdChanged(int id)
 {
     Q_UNUSED(id);
     // Can perform page-specific actions here
+}
+
+bool CreateVMWizard::validateCurrentPage()
+{
+    // Basic validation - can be extended per page
+    return true;
 }
 
 QString CreateVMWizard::vmName() const

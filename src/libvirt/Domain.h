@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
 #include "../core/BaseObject.h"
 #include <QString>
 #include <QPixmap>
+#include <QList>
 
 #include <libvirt/libvirt.h>
 
@@ -88,8 +89,17 @@ public:
     // Update cached info
     void updateInfo();
 
+    // Snapshot operations
+    QList<DomainSnapshot*> snapshots() const;
+    DomainSnapshot *createSnapshot(const QString &xml, unsigned int flags = 0);
+    DomainSnapshot *currentSnapshot() const;
+    bool hasCurrentSnapshot() const;
+
     // Connection
     Connection *connection() const { return m_connection; }
+
+    // Raw libvirt pointer (for advanced operations)
+    virDomainPtr rawDomain() const { return m_domain; }
 
 signals:
     void stateChanged(State newState);

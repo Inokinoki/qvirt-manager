@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 #include "../../libvirt/Connection.h"
 #include "../models/ConnectionListModel.h"
 #include "../models/VMListModel.h"
+#include "../widgets/ContextMenu.h"
 
 namespace QVirt {
 
@@ -64,6 +65,8 @@ private slots:
     void openConnectionDialog();
     void showPreferences();
     void showHostDetails();
+    void showStoragePools();
+    void showNetworks();
     void refresh();
 
 private:
@@ -71,7 +74,9 @@ private:
     void setupToolbar();
     void setupMenus();
     void connectSignals();
+    void setupKeyboardShortcuts();
     void updateVMControls();
+    void applyStylesheet();
 
     // UI components
     QSplitter *m_splitter;
@@ -110,9 +115,13 @@ private:
 
     // Menus
     QMenu *m_menuFile;
+    QMenu *m_menuEdit;
     QMenu *m_menuView;
     QMenu *m_menuVM;
     QMenu *m_menuHelp;
+
+    // Context menu and shortcuts
+    KeyboardShortcuts *m_keyboardShortcuts;
 };
 
 } // namespace QVirt

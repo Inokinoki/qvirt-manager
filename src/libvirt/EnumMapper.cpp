@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -10,11 +10,14 @@
  */
 
 #include "EnumMapper.h"
+#include "StoragePool.h"
+#include "Network.h"
+#include "StorageVolume.h"
 #include <QObject>
 
 namespace QVirt {
 
-QString EnumMapper::domainStateToString(virDomainState state)
+QString EnumMapper::stateToString(virDomainState state)
 {
     switch (state) {
     case VIR_DOMAIN_NOSTATE:
@@ -51,7 +54,7 @@ QString EnumMapper::domainStatusToString(virDomainState state)
     case VIR_DOMAIN_SHUTDOWN:
         return QObject::tr("Shutting down");
     default:
-        return domainStateToString(state);
+        return stateToString(state);
     }
 }
 
@@ -190,6 +193,111 @@ QString EnumMapper::virErrorToString(int code)
     // Simplified error handling - just return the code
     // In the future we can use virLastError in Domain/Connection classes
     return QObject::tr("Error code: %1").arg(code);
+}
+
+QString EnumMapper::stateToString(int state)
+{
+    return domainStatusToString(state);
+}
+
+QString EnumMapper::poolStateToString(StoragePool::PoolState state)
+{
+    switch (state) {
+    case StoragePool::StateInactive:
+        return QObject::tr("Inactive");
+    case StoragePool::StateRunning:
+        return QObject::tr("Running");
+    case StoragePool::StateDegraded:
+        return QObject::tr("Degraded");
+    default:
+        return QObject::tr("Unknown");
+    }
+}
+
+QString EnumMapper::poolTypeToString(StoragePool::PoolType type)
+{
+    switch (type) {
+    case StoragePool::TypeDir:
+        return QObject::tr("Directory");
+    case StoragePool::TypeFS:
+        return QObject::tr("Filesystem");
+    case StoragePool::TypeNetFS:
+        return QObject::tr("Network Filesystem");
+    case StoragePool::TypeLogical:
+        return QObject::tr("Logical Volume Manager");
+    case StoragePool::TypeDisk:
+        return QObject::tr("Physical Disk");
+    case StoragePool::TypeISCSI:
+        return QObject::tr("iSCSI");
+    case StoragePool::TypeSCSI:
+        return QObject::tr("SCSI");
+    case StoragePool::TypeMPATH:
+        return QObject::tr("Multipath");
+    case StoragePool::TypeRBD:
+        return QObject::tr("RBD (Ceph)");
+    case StoragePool::TypeSheepdog:
+        return QObject::tr("Sheepdog");
+    case StoragePool::TypeGlusterFS:
+        return QObject::tr("GlusterFS");
+    case StoragePool::TypeZFS:
+        return QObject::tr("ZFS");
+    case StoragePool::TypeVStorage:
+        return QObject::tr("VStorage");
+    default:
+        return QObject::tr("Unknown");
+    }
+}
+
+QString EnumMapper::volumeTypeToString(StorageVolume::VolumeType type)
+{
+    switch (type) {
+    case StorageVolume::TypeFile:
+        return QObject::tr("File");
+    case StorageVolume::TypeBlock:
+        return QObject::tr("Block");
+    case StorageVolume::TypeDir:
+        return QObject::tr("Directory");
+    case StorageVolume::TypeNetwork:
+        return QObject::tr("Network");
+    case StorageVolume::TypeNetDir:
+        return QObject::tr("Network Directory");
+    default:
+        return QObject::tr("Unknown");
+    }
+}
+
+QString EnumMapper::networkStateToString(Network::NetworkState state)
+{
+    switch (state) {
+    case Network::StateInactive:
+        return QObject::tr("Inactive");
+    case Network::StateRunning:
+        return QObject::tr("Running");
+    default:
+        return QObject::tr("Unknown");
+    }
+}
+
+QString EnumMapper::forwardModeToString(Network::ForwardMode mode)
+{
+    switch (mode) {
+    case Network::ForwardNAT:
+        return QObject::tr("NAT");
+    case Network::ForwardRoute:
+        return QObject::tr("Route");
+    case Network::ForwardBridge:
+        return QObject::tr("Bridge");
+    case Network::ForwardPrivate:
+        return QObject::tr("Private");
+    case Network::ForwardVEPA:
+        return QObject::tr("VEPA");
+    case Network::ForwardPassthrough:
+        return QObject::tr("Passthrough");
+    case Network::ForwardHostdev:
+        return QObject::tr("Hostdev");
+    default:
+        return QObject::tr("Unknown");
+    }
 }
 
 } // namespace QVirt

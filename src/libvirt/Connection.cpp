@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -173,6 +173,23 @@ QString Connection::capabilities() const
     QString result = QString::fromUtf8(caps);
     free(caps);
     return result;
+}
+
+QString Connection::libvirtVersion() const
+{
+    if (!m_conn) {
+        return "Libvirt (unknown version)";
+    }
+
+    unsigned long libvirtVersion = 0;
+    if (virConnectGetLibVersion(m_conn, &libvirtVersion) == 0) {
+        unsigned long major = libvirtVersion / 1000000;
+        unsigned long minor = (libvirtVersion % 1000000) / 1000;
+        unsigned long micro = libvirtVersion % 1000;
+        return QString("Libvirt %1.%2.%3").arg(major).arg(minor).arg(micro);
+    }
+
+    return "Libvirt (unknown version)";
 }
 
 void Connection::tick()

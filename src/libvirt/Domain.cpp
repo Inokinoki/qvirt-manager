@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -10,6 +10,7 @@
  */
 
 #include "Domain.h"
+#include "DomainSnapshot.h"
 #include "Connection.h"
 #include "EnumMapper.h"
 #include "../core/Error.h"
@@ -327,6 +328,79 @@ float Domain::networkUsage() const
     // TODO: Implement network usage calculation
     // Requires querying interface stats
     return 0.0f;
+}
+
+QList<DomainSnapshot*> Domain::snapshots() const
+{
+    QList<DomainSnapshot*> snapshotList;
+
+    if (!m_domain) {
+        return snapshotList;
+    }
+
+    // List all snapshots
+    int numSnapshots = virDomainSnapshotNum(m_domain, 0);
+    if (numSnapshots < 0) {
+        return snapshotList;
+    }
+
+    // Get snapshot names
+    char **names = new char*[numSnapshots];
+    numSnapshots = virDomainSnapshotListNames(m_domain, names, numSnapshots, 0);
+
+    for (int i = 0; i < numSnapshots; ++i) {
+        virDomainSnapshotPtr snap = virDomainSnapshotLookupByName(m_domain, names[i], 0);
+        if (snap) {
+            auto *snapshot = new DomainSnapshot(snap, const_cast<Domain*>(this),
+                                                const_cast<Domain*>(this));
+            snapshotList.append(snapshot);
+        }
+        free(names[i]);
+    }
+
+    delete[] names;
+
+    return snapshotList;
+}
+
+DomainSnapshot *Domain::createSnapshot(const QString &xml, unsigned int flags)
+{
+    if (!m_domain) {
+        return nullptr;
+    }
+
+    QByteArray xmlBytes = xml.toUtf8();
+    virDomainSnapshotPtr snap = virDomainSnapshotCreateXML(m_domain, xmlBytes.constData(), flags);
+
+    if (snap) {
+        return new DomainSnapshot(snap, this, this);
+    }
+
+    return nullptr;
+}
+
+DomainSnapshot *Domain::currentSnapshot() const
+{
+    if (!m_domain) {
+        return nullptr;
+    }
+
+    virDomainSnapshotPtr snap = virDomainSnapshotCurrent(m_domain, 0);
+    if (snap) {
+        return new DomainSnapshot(snap, const_cast<Domain*>(this),
+                                  const_cast<Domain*>(this));
+    }
+
+    return nullptr;
+}
+
+bool Domain::hasCurrentSnapshot() const
+{
+    if (!m_domain) {
+        return false;
+    }
+
+    return virDomainHasCurrentSnapshot(m_domain, 0) == 1;
 }
 
 } // namespace QVirt

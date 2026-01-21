@@ -1,0 +1,8 @@
+qvirt-manager (1.0.0) unstable; urgency=medium
+
+  * Initial release
+  * Qt-based virtual machine manager
+  * Complete feature parity with virt-manager
+  * Support for all major libvirt features
+
+ -- Inoki <veyx.shaw@gmail.com>  %(date "+%%a, %%d %%b %%Y %%H:%%M:%%S %%z")

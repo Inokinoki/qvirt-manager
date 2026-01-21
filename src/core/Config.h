@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,6 +59,44 @@ public:
 
     void setXMLEDitorEnabled(bool enable);
     bool xmlEditorEnabled() const;
+
+    // Confirmation settings
+    void setConfirmForceOff(bool confirm);
+    bool confirmForceOff() const;
+
+    void setConfirmDelete(bool confirm);
+    bool confirmDelete() const;
+
+    // Connection settings
+    void setAutoconnectOnStartup(bool autoconnect);
+    bool autoconnectOnStartup() const;
+
+    // Storage settings
+    void setDefaultStoragePath(const QString &path);
+    QString defaultStoragePath() const;
+
+    // Polling settings
+    void setVMUpdateInterval(int seconds);
+    int vmUpdateInterval() const;
+
+    void setCPUPollInterval(int seconds);
+    int cpuPollInterval() const;
+
+    void setDiskPollInterval(int seconds);
+    int diskPollInterval() const;
+
+    void setNetworkPollInterval(int seconds);
+    int networkPollInterval() const;
+
+    // Console settings
+    void setConsoleScale(bool scale);
+    bool consoleScale() const;
+
+    void setConsoleKeyCombo(const QString &combo);
+    QString consoleKeyCombo() const;
+
+    void setConsoleRedirectUSB(bool redirect);
+    bool consoleRedirectUSB() const;
 
 signals:
     void valueChanged(const QString &key);

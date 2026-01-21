@@ -8,3 +8,8 @@ if(BUILD_TESTING)
         message(STATUS "Qt${QT_VERSION_MAJOR}Test not found, unit tests disabled")
     endif()
 endif()
+
+# Integration tests
+if(BUILD_TESTING)
+    add_subdirectory(integration)
+endif()

@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -206,7 +206,7 @@ void HostDialog::updateInfo()
 
     // Get capabilities
     // In a real implementation, we'd parse virConnectGetCapabilities()
-    m_versionLabel->setText("Libvirt " + QString(VIR_VERSION_STRING));
+    m_versionLabel->setText(m_connection->libvirtVersion());
 
     // Architecture
     m_archLabel->setText("x86_64");

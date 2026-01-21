@@ -1,0 +1,22 @@
+<RCC>
+    <qresource prefix="/">
+        <!-- Stylesheets -->
+        <file>styles/default.qss</file>
+
+        <!-- Application Icon -->
+        <file>icons/app/qvirt-manager.svg</file>
+
+        <!-- Status Icons -->
+        <file>icons/status/running.svg</file>
+        <file>icons/status/paused.svg</file>
+        <file>icons/status/stopped.svg</file>
+        <file>icons/status/shutoff.svg</file>
+
+        <!-- Device Icons -->
+        <file>icons/devices/disk.svg</file>
+        <file>icons/devices/network.svg</file>
+        <file>icons/devices/cpu.svg</file>
+        <file>icons/devices/memory.svg</file>
+        <file>icons/devices/display.svg</file>
+    </qresource>
+</RCC>

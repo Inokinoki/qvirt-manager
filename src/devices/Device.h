@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -111,15 +111,19 @@ public:
 
     // PCI address
     unsigned int domain = 0;
-    unsigned int bus = 0;
+    unsigned int pciBus = 0;
     unsigned int slot = 0;
     unsigned int function = 0;
 
     // Drive address
     int controller = 0;
-    int bus = 0;
+    int driveBus = 0;
     int target = 0;
     int unit = 0;
+
+    // VirtioSerial address
+    int virtioBus = 0;
+    int port = 0;
 
     // Other types
     QString iobase;

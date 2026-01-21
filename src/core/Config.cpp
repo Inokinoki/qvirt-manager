@@ -1,7 +1,7 @@
 /*
  * QVirt-Manager
  *
- * Copyright (C) 2025-2026 The QVirt-Manager Developers
+ * Copyright (C) 2025-2026 Inoki <veyx.shaw@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -110,6 +110,132 @@ void Config::setXMLEDitorEnabled(bool enable)
 bool Config::xmlEditorEnabled() const
 {
     return m_settings.value("General/xmlEditorEnabled", true).toBool();
+}
+
+// Confirmation settings
+void Config::setConfirmForceOff(bool confirm)
+{
+    m_settings.setValue("Confirmation/forceOff", confirm);
+    emit valueChanged("Confirmation/forceOff");
+}
+
+bool Config::confirmForceOff() const
+{
+    return m_settings.value("Confirmation/forceOff", true).toBool();
+}
+
+void Config::setConfirmDelete(bool confirm)
+{
+    m_settings.setValue("Confirmation/delete", confirm);
+    emit valueChanged("Confirmation/delete");
+}
+
+bool Config::confirmDelete() const
+{
+    return m_settings.value("Confirmation/delete", true).toBool();
+}
+
+// Connection settings
+void Config::setAutoconnectOnStartup(bool autoconnect)
+{
+    m_settings.setValue("Connections/autoconnectOnStartup", autoconnect);
+    emit valueChanged("Connections/autoconnectOnStartup");
+}
+
+bool Config::autoconnectOnStartup() const
+{
+    return m_settings.value("Connections/autoconnectOnStartup", true).toBool();
+}
+
+// Storage settings
+void Config::setDefaultStoragePath(const QString &path)
+{
+    m_settings.setValue("Storage/defaultPath", path);
+    emit valueChanged("Storage/defaultPath");
+}
+
+QString Config::defaultStoragePath() const
+{
+    return m_settings.value("Storage/defaultPath", "/var/lib/libvirt/images").toString();
+}
+
+// Polling settings
+void Config::setVMUpdateInterval(int seconds)
+{
+    m_settings.setValue("Polling/vmUpdateInterval", seconds);
+    emit valueChanged("Polling/vmUpdateInterval");
+}
+
+int Config::vmUpdateInterval() const
+{
+    return m_settings.value("Polling/vmUpdateInterval", 2).toInt();
+}
+
+void Config::setCPUPollInterval(int seconds)
+{
+    m_settings.setValue("Polling/cpuPollInterval", seconds);
+    emit valueChanged("Polling/cpuPollInterval");
+}
+
+int Config::cpuPollInterval() const
+{
+    return m_settings.value("Polling/cpuPollInterval", 1).toInt();
+}
+
+void Config::setDiskPollInterval(int seconds)
+{
+    m_settings.setValue("Polling/diskPollInterval", seconds);
+    emit valueChanged("Polling/diskPollInterval");
+}
+
+int Config::diskPollInterval() const
+{
+    return m_settings.value("Polling/diskPollInterval", 5).toInt();
+}
+
+void Config::setNetworkPollInterval(int seconds)
+{
+    m_settings.setValue("Polling/networkPollInterval", seconds);
+    emit valueChanged("Polling/networkPollInterval");
+}
+
+int Config::networkPollInterval() const
+{
+    return m_settings.value("Polling/networkPollInterval", 3).toInt();
+}
+
+// Console settings
+void Config::setConsoleScale(bool scale)
+{
+    m_settings.setValue("Console/scale", scale);
+    emit valueChanged("Console/scale");
+}
+
+bool Config::consoleScale() const
+{
+    return m_settings.value("Console/scale", true).toBool();
+}
+
+void Config::setConsoleKeyCombo(const QString &combo)
+{
+    m_settings.setValue("Console/keyCombo", combo);
+    emit valueChanged("Console/keyCombo");
+}
+
+QString Config::consoleKeyCombo() const
+{
+    return m_settings.value("Console/keyCombo", "ctrl+alt").toString();
+}
+
+void Config::setConsoleRedirectUSB(bool redirect)
+{
+    m_settings.setValue("Console/redirectUSB", redirect);
+    emit valueChanged("Console/redirectUSB");
+}
+
+bool Config::consoleRedirectUSB() const
+{
+    return m_settings.value("Console/redirectUSB", false).toBool();
 }
 
 } // namespace QVirt

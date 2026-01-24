@@ -6,6 +6,10 @@ ARG QT_VERSION=6
 
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
+# Re-declare build args after FROM (they don't persist across FROM statements)
+ARG UBUNTU_VERSION
+ARG QT_VERSION
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -51,42 +55,21 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /workspace
 
-# Set Qt path for CMake and Qt selection
+# Detect the multiarch directory and set Qt paths for CMake
+# This ensures paths are correct for both x86_64 and ARM64 architectures
+RUN DEBIAN_MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH) && \
+    echo "Detected multiarch: $DEBIAN_MULTIARCH" && \
+    echo "export CMAKE_PREFIX_PATH=/usr/lib/$DEBIAN_MULTIARCH" > /etc/profile.d/cmake-env.sh && \
+    echo "export Qt5_DIR=/usr/lib/$DEBIAN_MULTIARCH" >> /etc/profile.d/cmake-env.sh && \
+    echo "export Qt6_DIR=/usr/lib/$DEBIAN_MULTIARCH" >> /etc/profile.d/cmake-env.sh
+
+# Set Qt selection
 ENV QT_SELECT=qt${QT_VERSION}
-ENV CMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu
 
-# Set Qt5_DIR or Qt6_DIR based on QT_VERSION build arg
-RUN if [ "${QT_VERSION}" = "5" ]; then \
-        echo "Qt5_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh && \
-        echo "export Qt5_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh; \
-    fi
-
-RUN if [ "${QT_VERSION}" = "6" ]; then \
-        echo "Qt6_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh && \
-        echo "export Qt6_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh && \
-        echo "export CMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh; \
-    fi
-
-RUN if [ "${QT_VERSION}" = "5" ]; then \
-        echo "ENV Qt5_DIR=/usr/lib/x86_64-linux-gnu" >> /tmp/qt5_env && \
-        . /tmp/qt5_env && rm /tmp/qt5_env; \
-    fi
-
-# Set the Qt directory as an ENV variable that persists
-# Note: We need to set this conditionally, so we use a shell approach
-RUN echo "export Qt${QT_VERSION}_DIR=/usr/lib/x86_64-linux-gnu" > /usr/local/bin/set-qt-path.sh && \
-    chmod +x /usr/local/bin/set-qt-path.sh
-
-# Source the Qt path script in bashrc
+# Source the cmake-env.sh in bashrc for all shells
 RUN if [ -f /etc/bash.bashrc ]; then \
-        echo "source /usr/local/bin/set-qt-path.sh" >> /etc/bash.bashrc; \
+        echo ". /etc/profile.d/cmake-env.sh" >> /etc/bash.bashrc; \
     fi
-
-# For non-login shells, we need to set these explicitly
-# The Qt version will be available as QT_VERSION, so we set both paths
-# CMake will pick the right one based on find_package call
-ENV Qt5_DIR=/usr/lib/x86_64-linux-gnu
-ENV Qt6_DIR=/usr/lib/x86_64-linux-gnu
 
 # Verify installation
 RUN echo "Ubuntu version: ${UBUNTU_VERSION}" && \

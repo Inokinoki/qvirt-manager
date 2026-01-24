@@ -42,6 +42,7 @@ jobs:
           -w /workspace \
           qvirt-builder:${{ matrix.version }}-qt${{ matrix.qt_version }} \
           bash -c "
+            . /etc/profile.d/cmake-env.sh &&
             mkdir -p build && cd build &&
             cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
                   -DQT_VERSION_MAJOR=${{ matrix.qt_version }} \

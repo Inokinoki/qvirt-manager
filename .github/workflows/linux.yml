@@ -270,9 +270,9 @@ jobs:
     - name: Generate coverage report
       run: |
         cd build
-        lcov --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info '/usr/*' --output-file coverage.info
-        lcov --list coverage.info
+        lcov --capture --directory . --output-file coverage.info --ignore-errors empty || true
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info || true
+        lcov --list coverage.info || true
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4

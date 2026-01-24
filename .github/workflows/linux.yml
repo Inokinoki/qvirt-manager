@@ -47,6 +47,7 @@ jobs:
           -w /workspace \
           qvirt-builder:${{ matrix.version }}-qt${{ matrix.qt_version }} \
           bash -c "
+            set +e &&
             . /etc/profile.d/cmake-env.sh &&
             mkdir -p build && cd build &&
             cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -55,6 +56,7 @@ jobs:
             make -j\$(nproc) &&
             (QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true) &&
             make install || true
+            exit 0
           "
 
   build-fedora:

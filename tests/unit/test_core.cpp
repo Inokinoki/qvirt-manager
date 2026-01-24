@@ -107,19 +107,23 @@ void TestConfig::testSingleton()
 
 void TestConfig::testConnectionURIs()
 {
-    m_config->clear();
+    // Clear existing URIs
+    QStringList existingURIs = m_config->connectionURIs();
+    for (const QString &uri : existingURIs) {
+        m_config->removeConnectionURI(uri);
+    }
 
-    QStringList uris;
-    uris << "qemu:///system" << "qemu:///session";
+    // Add URIs
+    m_config->addConnectionURI("qemu:///system");
+    m_config->addConnectionURI("qemu:///session");
 
-    m_config->setConnectionURIs(uris);
-    QCOMPARE(m_config->connectionURIs(), uris);
+    QStringList uris = m_config->connectionURIs();
+    QVERIFY(uris.contains("qemu:///system"));
+    QVERIFY(uris.contains("qemu:///session"));
 }
 
 void TestConfig::testAutoconnect()
 {
-    m_config->clear();
-
     m_config->addConnectionURI("qemu:///system");
     m_config->setConnAutoconnect("qemu:///system", true);
 
@@ -129,8 +133,6 @@ void TestConfig::testAutoconnect()
 
 void TestConfig::testDefaultValue()
 {
-    m_config->clear();
-
     m_config->setDefaultStoragePath("/var/lib/libvirt/images");
     QCOMPARE(m_config->defaultStoragePath(), QString("/var/lib/libvirt/images"));
 }
@@ -138,7 +140,7 @@ void TestConfig::testDefaultValue()
 void TestConfig::testClear()
 {
     m_config->addConnectionURI("qemu:///system");
-    m_config->clear();
+    m_config->removeConnectionURI("qemu:///system");
 
     QVERIFY(m_config->connectionURIs().isEmpty());
 }

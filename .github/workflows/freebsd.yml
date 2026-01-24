@@ -41,7 +41,7 @@ jobs:
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=${{ matrix.qt_version }} ..
           make -j$(sysctl -n hw.ncpu)
-          ctest --output-on-failure || true
+          QT_QPA_PLATFORM=offscreen ctest --output-on-failure
           sudo make install
 
   build-freebsd-latest:
@@ -69,7 +69,7 @@ jobs:
           make -j$(sysctl -n hw.ncpu)
 
           # Run tests
-          ctest --output-on-failure || true
+          QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
   build-freebsd-clang:
     name: Build with Clang on FreeBSD
@@ -94,7 +94,7 @@ jobs:
                 -DQT_VERSION_MAJOR=6 \
                 ..
           make -j$(sysctl -n hw.ncpu)
-          ctest --output-on-failure || true
+          QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
   build-freebsd-gcc:
     name: Build with GCC on FreeBSD
@@ -118,7 +118,7 @@ jobs:
                 -DQT_VERSION_MAJOR=6 \
                 ..
           make -j$(sysctl -n hw.ncpu)
-          ctest --output-on-failure || true
+          QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
   test-qt5-freebsd:
     name: Test Qt 5 on FreeBSD
@@ -138,7 +138,7 @@ jobs:
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=5 ..
           make -j$(sysctl -n hw.ncpu)
-          ctest --output-on-failure || true
+          QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
   test-qt6-freebsd:
     name: Test Qt 6 on FreeBSD
@@ -158,7 +158,7 @@ jobs:
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 ..
           make -j$(sysctl -n hw.ncpu)
-          ctest --output-on-failure || true
+          QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
   freebsd-sanitizers:
     name: FreeBSD with Sanitizers
@@ -182,11 +182,11 @@ jobs:
           cd build
           cmake -DCMAKE_BUILD_TYPE=Debug \
                 -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer}}" \
-                -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer}}" \
+                -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}" \
                 -DQT_VERSION_MAJOR=6 \
                 ..
           make -j$(sysctl -n hw.ncpu)
-          ASAN_OPTIONS=halt_on_error=0 ctest --output-on-failure || true
+          ASAN_OPTIONS=halt_on_error=0 QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
   freebsd-packages:
     name: Create FreeBSD Package
@@ -204,10 +204,10 @@ jobs:
           pkg install -y cmake qt6-qtbase libvirt
         run: |
           mkdir -p build
-            cd build
-            cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 ..
-            make -j$(sysctl -n hw.ncpu)
-            make package || true
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 ..
+          make -j$(sysctl -n hw.ncpu)
+          make package || true
 
     - name: Upload package
       uses: actions/upload-artifact@v4

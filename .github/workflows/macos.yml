@@ -57,7 +57,7 @@ jobs:
     - name: Run Tests
       run: |
         cd build
-        ctest --output-on-failure || true
+        QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
     - name: Install
       run: cmake --install build --config ${{ matrix.build_type }}

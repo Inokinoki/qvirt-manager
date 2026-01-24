@@ -51,8 +51,26 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /workspace
 
-# Set Qt path for CMake
+# Set Qt path for CMake and Qt selection
 ENV QT_SELECT=qt${QT_VERSION}
+
+# For Qt5, set the Qt5_DIR to point to the config location
+# For Qt6, set Qt6_DIR to point to the config location
+RUN if [ "${QT_VERSION}" = "5" ]; then \
+        echo "Setting Qt5 paths for CMake"; \
+        export Qt5_DIR="/usr/lib/x86_64-linux-gnu"; \
+        export CMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu"; \
+        echo "Qt5_DIR=$Qt5_DIR" >> /etc/environment; \
+        echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH" >> /etc/environment; \
+    fi
+
+RUN if [ "${QT_VERSION}" = "6" ]; then \
+        echo "Setting Qt6 paths for CMake"; \
+        export Qt6_DIR="/usr/lib/x86_64-linux-gnu"; \
+        export CMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu"; \
+        echo "Qt6_DIR=$Qt6_DIR" >> /etc/environment; \
+        echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH" >> /etc/environment; \
+    fi
 
 # Verify installation
 RUN echo "Ubuntu version: ${UBUNTU_VERSION}" && \

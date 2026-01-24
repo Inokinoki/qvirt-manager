@@ -18,6 +18,7 @@
 #include <QFontDatabase>
 #include <QSyntaxHighlighter>
 #include <QTextBlock>
+#include <QtGlobal>
 #include <QTextCursor>
 
 #include <QDomDocument>
@@ -145,7 +146,11 @@ void XMLEditor::setupUI()
     m_editor->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     m_editor->setLineWrapMode(QPlainTextEdit::NoWrap);
     m_editor->setTabChangesFocus(true);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    m_editor->setTabStopDistance(4);
+#else
     m_editor->setTabStopWidth(4);
+#endif
 
     // Set monospace font and basic styling
     QFont font = m_editor->font();

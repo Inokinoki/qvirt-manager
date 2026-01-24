@@ -33,9 +33,9 @@ RUN if [ "${QT_VERSION}" = "5" ]; then \
         qtbase5-dev \
         qttools5-dev \
         qttools5-dev-tools \
-        libqt5uitools5-dev \
         qtbase5-private-dev \
-        && rm -rf /var/lib/apt/lists/*; \
+        && apt-get install -y libqt5uitools5-dev || true && \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Install Qt6 dependencies
@@ -44,8 +44,8 @@ RUN if [ "${QT_VERSION}" = "6" ]; then \
         qt6-base-dev \
         qt6-tools-dev \
         qt6-tools-dev-tools \
-        qt6-base-private-dev \
-        && rm -rf /var/lib/apt/lists/*; \
+        && apt-get install -y qt6-base-private-dev || true && \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Optional dependencies for console viewers

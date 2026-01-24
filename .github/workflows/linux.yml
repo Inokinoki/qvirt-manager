@@ -163,7 +163,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang-tidy cppcheck qt6-base-dev libvirt-dev
+        sudo apt-get install -y cmake clang-tidy cppcheck qt6-base-dev qt6-tools-dev libvirt-dev
 
     - name: Configure for analysis
       run: |
@@ -209,7 +209,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake qt6-base-dev libvirt-dev
+        sudo apt-get install -y cmake qt6-base-dev qt6-tools-dev libvirt-dev
 
     - name: Configure with ${{ matrix.sanitizer }} sanitizer
       run: |
@@ -244,7 +244,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake qt6-base-dev libvirt-dev lcov
+        sudo apt-get install -y cmake qt6-base-dev qt6-tools-dev libvirt-dev lcov
 
     - name: Configure with coverage
       run: |

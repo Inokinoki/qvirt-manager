@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y \
     libvirt-dev \
     wget \
     curl \
+    libgl1-mesa-dev \
+    libglvnd-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Qt5 dependencies

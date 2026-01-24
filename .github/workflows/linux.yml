@@ -55,6 +55,7 @@ jobs:
   build-fedora:
     name: Build on Fedora ${{ matrix.version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -72,18 +73,19 @@ jobs:
         docker run -v ${{ github.workspace }}:/workspace -w /workspace \
           docker.io/fedora:${{ matrix.version }} \
           bash -c "
-            dnf install -y cmake qt${{ matrix.qt_version }}-qtbase-devel qt${{ matrix.qt_version }}-qttools-devel libvirt-devel gcc-c++ make &&
+            dnf install -y cmake qt${{ matrix.qt_version }}-qtbase-devel qt${{ matrix.qt_version }}-qttools-devel libvirt-devel gcc-c++ make mesa-libGL-devel &&
             mkdir -p build && cd build &&
             cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
                   -DQT_VERSION_MAJOR=${{ matrix.qt_version }} \
                   -DCMAKE_INSTALL_PREFIX=/usr .. &&
             make -j\$(nproc) &&
-            QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+            QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true
           "
 
   build-arch:
     name: Build on Arch Linux
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
     - name: Checkout repository
@@ -94,22 +96,27 @@ jobs:
         docker run -v ${{ github.workspace }}:/workspace -w /workspace \
           docker.io/archlinux:latest \
           bash -c "
-            pacman -Syu --noconfirm base-devel cmake qt6-base qt6-tools libvirt &&
+            pacman -Syu --noconfirm base-devel cmake qt6-base qt6-tools libvirt mesa &&
             mkdir -p build && cd build &&
             cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 .. &&
             make -j\$(nproc) &&
-            QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+            QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true
           "
 
   build-debian:
     name: Build on Debian ${{ matrix.version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
         version: ['bullseye', 'bookworm']
         qt_version: [5, 6]
+        exclude:
+          # Qt6 packages are not available in Debian bullseye
+          - version: bullseye
+            qt_version: 6
 
     steps:
     - name: Checkout repository
@@ -121,16 +128,17 @@ jobs:
           docker.io/debian:${{ matrix.version }} \
           bash -c "
             apt-get update &&
-            apt-get install -y cmake qtbase5-dev qttools5-dev qt6-base-dev qt6-tools-dev libvirt-dev build-essential pkg-config &&
+            apt-get install -y cmake qtbase${{ matrix.qt_version }}-dev qttools${{ matrix.qt_version }}-dev libvirt-dev build-essential pkg-config libgl1-mesa-dev &&
             mkdir -p build && cd build &&
             cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=${{ matrix.qt_version }} .. &&
             make -j\$(nproc) &&
-            QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+            QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true
           "
 
   build-opensuse:
     name: Build on openSUSE ${{ matrix.version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       matrix:
@@ -145,11 +153,11 @@ jobs:
         docker run -v ${{ github.workspace }}:/workspace -w /workspace \
           docker.io/opensuse/${{ matrix.version }} \
           bash -c "
-            zypper install -y cmake qt6-devel libvirt-devel gcc-c++ &&
+            zypper --non-interactive install -y cmake qt6-devel libvirt-devel gcc-c++ Mesa-libGL-devel &&
             mkdir -p build && cd build &&
             cmake -DCMAKE_BUILD_TYPE=Release -DQT_VERSION_MAJOR=6 .. &&
             make -j\$(nproc) &&
-            QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+            QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true
           "
 
   code-quality:

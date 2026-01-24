@@ -53,24 +53,40 @@ WORKDIR /workspace
 
 # Set Qt path for CMake and Qt selection
 ENV QT_SELECT=qt${QT_VERSION}
+ENV CMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu
 
-# For Qt5, set the Qt5_DIR to point to the config location
-# For Qt6, set Qt6_DIR to point to the config location
+# Set Qt5_DIR or Qt6_DIR based on QT_VERSION build arg
 RUN if [ "${QT_VERSION}" = "5" ]; then \
-        echo "Setting Qt5 paths for CMake"; \
-        export Qt5_DIR="/usr/lib/x86_64-linux-gnu"; \
-        export CMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu"; \
-        echo "Qt5_DIR=$Qt5_DIR" >> /etc/environment; \
-        echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH" >> /etc/environment; \
+        echo "Qt5_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh && \
+        echo "export Qt5_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh; \
     fi
 
 RUN if [ "${QT_VERSION}" = "6" ]; then \
-        echo "Setting Qt6 paths for CMake"; \
-        export Qt6_DIR="/usr/lib/x86_64-linux-gnu"; \
-        export CMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu"; \
-        echo "Qt6_DIR=$Qt6_DIR" >> /etc/environment; \
-        echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH" >> /etc/environment; \
+        echo "Qt6_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh && \
+        echo "export Qt6_DIR=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh && \
+        echo "export CMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu" >> /etc/profile.d/qt-env.sh; \
     fi
+
+RUN if [ "${QT_VERSION}" = "5" ]; then \
+        echo "ENV Qt5_DIR=/usr/lib/x86_64-linux-gnu" >> /tmp/qt5_env && \
+        . /tmp/qt5_env && rm /tmp/qt5_env; \
+    fi
+
+# Set the Qt directory as an ENV variable that persists
+# Note: We need to set this conditionally, so we use a shell approach
+RUN echo "export Qt${QT_VERSION}_DIR=/usr/lib/x86_64-linux-gnu" > /usr/local/bin/set-qt-path.sh && \
+    chmod +x /usr/local/bin/set-qt-path.sh
+
+# Source the Qt path script in bashrc
+RUN if [ -f /etc/bash.bashrc ]; then \
+        echo "source /usr/local/bin/set-qt-path.sh" >> /etc/bash.bashrc; \
+    fi
+
+# For non-login shells, we need to set these explicitly
+# The Qt version will be available as QT_VERSION, so we set both paths
+# CMake will pick the right one based on find_package call
+ENV Qt5_DIR=/usr/lib/x86_64-linux-gnu
+ENV Qt6_DIR=/usr/lib/x86_64-linux-gnu
 
 # Verify installation
 RUN echo "Ubuntu version: ${UBUNTU_VERSION}" && \

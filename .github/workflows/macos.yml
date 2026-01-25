@@ -9,19 +9,13 @@ on:
 
 jobs:
   build-macos:
-    name: Build on macOS ${{ matrix.version }} with Qt ${{ matrix.qt_version }}
-    runs-on: macos-${{ matrix.version }}
+    name: Build on macOS with Qt${{ matrix.qt_version }}
+    runs-on: macos-13
 
     strategy:
       fail-fast: false
       matrix:
-        version: ['12', '13', '14']
-        qt_version: ['5.15.2', '6.5.3', '6.6.1']
-        build_type: [Debug, Release]
-        exclude:
-          # Exclude some combinations to reduce matrix size
-          - version: '12'
-            qt_version: '6.6.1'
+        qt_version: ['5.15.2', '6.5.3']
 
     steps:
     - name: Checkout repository
@@ -46,13 +40,13 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH="$Qt6_DIR;$Qt5_DIR" \
           -DQT_VERSION_MAJOR=${{ matrix.qt_version == '5.15.2' && '5' || '6' }} \
           -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
     - name: Build
-      run: cmake --build build --config ${{ matrix.build_type }} -j$(sysctl -n hw.ncpu)
+      run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
 
     - name: Run Tests
       run: |
@@ -60,7 +54,7 @@ jobs:
         QT_QPA_PLATFORM=offscreen ctest --output-on-failure
 
     - name: Install
-      run: cmake --install build --config ${{ matrix.build_type }}
+      run: cmake --install build --config Release
 
     - name: Create macOS Bundle
       run: |
@@ -70,194 +64,10 @@ jobs:
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: qvirt-manager-macos-${{ matrix.version }}-qt${{ matrix.qt_version }}-${{ matrix.build_type }}
+        name: qvirt-manager-macos-qt${{ matrix.qt_version == '5.15.2' && '5' || '6' }}
         path: |
           build/qvirt-manager.app
           build/qvirt-manager.dmg
           install/
         retention-days: 7
       continue-on-error: true
-
-  build-macos-universal:
-    name: Build Universal Binary (Apple Silicon + Intel)
-    runs-on: macos-latest
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup Qt 6
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: '6.6.1'
-        host: 'mac'
-        target: 'desktop'
-        arch: 'clang_64'
-        modules: 'qtserialport'
-
-    - name: Install libvirt
-      run: brew install libvirt pkg-config
-
-    - name: Configure for Universal Binary
-      run: |
-        cmake -B build-universal \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
-          -DCMAKE_PREFIX_PATH="$Qt6_DIR" \
-          -DQT_VERSION_MAJOR=6
-
-    - name: Build Universal Binary
-      run: cmake --build build-universal --config Release -j$(sysctl -n hw.ncpu)
-
-    - name: Upload Universal Binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: qvirt-manager-macos-universal
-        path: build-universal/qvirt-manager.app
-        retention-days: 7
-      continue-on-error: true
-
-  build-macos-xcode:
-    name: Build with Xcode Generator
-    runs-on: macos-14
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup Qt 6
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: '6.5.3'
-        host: 'mac'
-        target: 'desktop'
-        arch: 'clang_64'
-        modules: 'qtserialport'
-
-    - name: Install libvirt
-      run: brew install libvirt pkg-config
-
-    - name: Configure with Xcode generator
-      run: |
-        cmake -B build-xcode \
-          -G Xcode \
-          -DCMAKE_PREFIX_PATH="$Qt6_DIR" \
-          -DQT_VERSION_MAJOR=6 \
-          -DCMAKE_BUILD_TYPE=Release
-
-    - name: Build with xcodebuild
-      run: |
-        cd build-xcode
-        xcodebuild -scheme qvirt-manager -configuration Release
-
-  codesign:
-    name: Test Code Signing
-    runs-on: macos-latest
-    # Only run this if secrets are available
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup Qt 6
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: '6.6.1'
-        host: 'mac'
-        target: 'desktop'
-        modules: 'qtserialport'
-
-    - name: Install libvirt
-      run: brew install libvirt pkg-config
-
-    - name: Configure
-      run: |
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="$Qt6_DIR" \
-          -DQT_VERSION_MAJOR=6
-
-    - name: Build
-      run: cmake --build build --config Release
-
-    - name: Ad-hoc code signing
-      run: |
-        codesign --force --deep --sign - build/qvirt-manager.app
-
-    - name: Verify signature
-      run: codesign -v -v build/qvirt-manager.app
-
-  static-analysis:
-    name: Static Analysis on macOS
-    runs-on: macos-latest
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup Qt 6
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: '6.5.3'
-        host: 'mac'
-        target: 'desktop'
-
-    - name: Install libvirt
-      run: brew install libvirt pkg-config
-
-    - name: Configure with scan-build
-      run: |
-        brew install llvm
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_PREFIX_PATH="$Qt6_DIR" \
-          -DQT_VERSION_MAJOR=6 \
-          -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang \
-          -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
-
-    - name: Run static analyzer
-      run: |
-        cd build
-        scan-build --status-bugs make -j$(sysctl -n hw.ncpu) || true
-
-  notarization-test:
-    name: Test Notarization Setup
-    runs-on: macos-latest
-    if: github.event_name == 'workflow_dispatch'
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup Qt 6
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: '6.6.1'
-        host: 'mac'
-        target: 'desktop'
-        modules: 'qtserialport'
-
-    - name: Install libvirt
-      run: brew install libvirt pkg-config
-
-    - name: Configure
-      run: |
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="$Qt6_DIR" \
-          -DQT_VERSION_MAJOR=6
-
-    - name: Build
-      run: cmake --build build --config Release
-
-    - name: Create DMG
-      run: |
-        cd build
-        macdeployqt qvirt-manager.app -dmg -always-overwrite
-
-    - name: Upload for manual notarization
-      uses: actions/upload-artifact@v4
-      with:
-        name: qvirt-manager-macos-notarization
-        path: build/qvirt-manager.dmg

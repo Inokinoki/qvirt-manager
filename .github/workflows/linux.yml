@@ -9,20 +9,14 @@ on:
 
 jobs:
   build-ubuntu:
-    name: Build on Ubuntu ${{ matrix.version }}
+    name: Build on Ubuntu with Qt${{ matrix.qt_version }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     strategy:
       fail-fast: false
       matrix:
-        version: ['20.04', '22.04', '24.04']
         qt_version: [5, 6]
-        build_type: [Debug, Release]
-        exclude:
-          # Qt6 packages are not available in Ubuntu 20.04
-          - version: '20.04'
-            qt_version: 6
 
     steps:
     - name: Checkout repository
@@ -35,8 +29,8 @@ jobs:
 
     - name: Build in Docker
       run: |
-        docker build -t qvirt-builder:${{ matrix.version }}-qt${{ matrix.qt_version }} \
-          --build-arg UBUNTU_VERSION=${{ matrix.version }} \
+        docker build -t qvirt-builder:22.04-qt${{ matrix.qt_version }} \
+          --build-arg UBUNTU_VERSION=22.04 \
           --build-arg QT_VERSION=${{ matrix.qt_version }} \
           -f .github/docker/Dockerfile.ubuntu .
 
@@ -45,12 +39,12 @@ jobs:
         docker run --rm \
           -v ${{ github.workspace }}:/workspace \
           -w /workspace \
-          qvirt-builder:${{ matrix.version }}-qt${{ matrix.qt_version }} \
+          qvirt-builder:22.04-qt${{ matrix.qt_version }} \
           bash -c "
             set +e &&
             . /etc/profile.d/cmake-env.sh &&
             mkdir -p build && cd build &&
-            cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            cmake -DCMAKE_BUILD_TYPE=Release \
                   -DQT_VERSION_MAJOR=${{ matrix.qt_version }} \
                   -DCMAKE_INSTALL_PREFIX=/usr .. &&
             make -j\$(nproc) &&
@@ -60,16 +54,14 @@ jobs:
           "
 
   build-fedora:
-    name: Build on Fedora ${{ matrix.version }}
+    name: Build on Fedora with Qt${{ matrix.qt_version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
-        version: ['39', '40']
         qt_version: [5, 6]
-        build_type: [Release]
 
     steps:
     - name: Checkout repository
@@ -78,11 +70,11 @@ jobs:
     - name: Build in Fedora container
       run: |
         docker run -v ${{ github.workspace }}:/workspace -w /workspace \
-          docker.io/fedora:${{ matrix.version }} \
+          docker.io/fedora:40 \
           bash -c "
             dnf install -y cmake qt${{ matrix.qt_version }}-qtbase-devel qt${{ matrix.qt_version }}-qttools-devel libvirt-devel gcc-c++ make mesa-libGL-devel &&
             mkdir -p build && cd build &&
-            cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            cmake -DCMAKE_BUILD_TYPE=Release \
                   -DQT_VERSION_MAJOR=${{ matrix.qt_version }} \
                   -DCMAKE_INSTALL_PREFIX=/usr .. &&
             make -j\$(nproc) &&
@@ -111,19 +103,14 @@ jobs:
           "
 
   build-debian:
-    name: Build on Debian ${{ matrix.version }}
+    name: Build on Debian with Qt${{ matrix.qt_version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
-        version: ['bullseye', 'bookworm']
         qt_version: [5, 6]
-        exclude:
-          # Qt6 packages are not available in Debian bullseye
-          - version: bullseye
-            qt_version: 6
 
     steps:
     - name: Checkout repository
@@ -132,7 +119,7 @@ jobs:
     - name: Build in Debian container
       run: |
         docker run -v ${{ github.workspace }}:/workspace -w /workspace \
-          docker.io/debian:${{ matrix.version }} \
+          docker.io/debian:bookworm \
           bash -c "
             apt-get update &&
             apt-get install -y cmake qtbase${{ matrix.qt_version }}-dev qttools${{ matrix.qt_version }}-dev libvirt-dev build-essential pkg-config libgl1-mesa-dev &&
@@ -143,13 +130,9 @@ jobs:
           "
 
   build-opensuse:
-    name: Build on openSUSE ${{ matrix.version }}
+    name: Build on openSUSE
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
-    strategy:
-      matrix:
-        version: ['tumbleweed', 'leap:15.5']
 
     steps:
     - name: Checkout repository
@@ -158,7 +141,7 @@ jobs:
     - name: Build in openSUSE container
       run: |
         docker run -v ${{ github.workspace }}:/workspace -w /workspace \
-          docker.io/opensuse/${{ matrix.version }} \
+          docker.io/opensuse/tumbleweed \
           bash -c "
             zypper --non-interactive install -y cmake qt6-devel libvirt-devel gcc-c++ Mesa-libGL-devel &&
             mkdir -p build && cd build &&

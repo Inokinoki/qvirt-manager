@@ -17,10 +17,6 @@ if(LIBVIRT_FOUND)
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
     )
-    target_compile_definitions(qvirt-core
-        PUBLIC
-            LIBVIRT_FOUND
-    )
 endif()
 
 target_link_libraries(qvirt-core
@@ -38,23 +34,17 @@ if(LIBVIRT_FOUND)
 endif()
 
 # Libvirt wrappers
-# Only add libvirt sources when libvirt is found
-if(LIBVIRT_FOUND)
-    add_library(qvirt-libvirt
-        libvirt/Connection.cpp
-        libvirt/Domain.cpp
-        libvirt/DomainSnapshot.cpp
-        libvirt/Network.cpp
-        libvirt/StoragePool.cpp
-        libvirt/StorageVolume.cpp
-        libvirt/NodeDevice.cpp
-        libvirt/EnumMapper.cpp
-        libvirt/Guest.cpp
-    )
-else()
-    # Create empty library when libvirt is not found
-    add_library(qvirt-libvirt STATIC)
-endif()
+add_library(qvirt-libvirt
+    libvirt/Connection.cpp
+    libvirt/Domain.cpp
+    libvirt/DomainSnapshot.cpp
+    libvirt/Network.cpp
+    libvirt/StoragePool.cpp
+    libvirt/StorageVolume.cpp
+    libvirt/NodeDevice.cpp
+    libvirt/EnumMapper.cpp
+    libvirt/Guest.cpp
+)
 
 target_include_directories(qvirt-libvirt
     PUBLIC
@@ -81,10 +71,6 @@ if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-libvirt
         PUBLIC
             ${LIBVIRT_LIBRARIES}
-    )
-    target_compile_definitions(qvirt-libvirt
-        PUBLIC
-            LIBVIRT_FOUND
     )
 endif()
 
@@ -146,10 +132,6 @@ if(LIBVIRT_FOUND)
     target_include_directories(qvirt-ui
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
-    )
-    target_compile_definitions(qvirt-ui
-        PUBLIC
-            LIBVIRT_FOUND
     )
 endif()
 

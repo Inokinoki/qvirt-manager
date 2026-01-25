@@ -17,27 +17,12 @@
 #include <QPixmap>
 #include <QList>
 
-#ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
 
 // Windows.h defines 'state' as a macro which breaks our code
 #ifdef _WIN32
 #undef state
 #endif
-#else
-// Forward declarations for when libvirt is not available
-typedef void *virDomainPtr;
-
-// Define libvirt constants when libvirt is not available
-#define VIR_DOMAIN_NOSTATE 0
-#define VIR_DOMAIN_RUNNING 1
-#define VIR_DOMAIN_BLOCKED 2
-#define VIR_DOMAIN_PAUSED 3
-#define VIR_DOMAIN_SHUTDOWN 4
-#define VIR_DOMAIN_SHUTOFF 5
-#define VIR_DOMAIN_CRASHED 6
-#define VIR_DOMAIN_PMSUSPENDED 7
-#endif // LIBVIRT_FOUND
 
 namespace QVirt {
 

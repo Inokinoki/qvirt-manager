@@ -10,16 +10,28 @@ add_library(qvirt-core
 target_include_directories(qvirt-core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${LIBVIRT_INCLUDE_DIRS}
 )
+
+if(LIBVIRT_FOUND)
+    target_include_directories(qvirt-core
+        PUBLIC
+            ${LIBVIRT_INCLUDE_DIRS}
+    )
+endif()
 
 target_link_libraries(qvirt-core
     PUBLIC
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::UiTools
-        ${LIBVIRT_LIBRARIES}
 )
+
+if(LIBVIRT_FOUND)
+    target_link_libraries(qvirt-core
+        PUBLIC
+            ${LIBVIRT_LIBRARIES}
+    )
+endif()
 
 # Libvirt wrappers
 add_library(qvirt-libvirt
@@ -37,8 +49,14 @@ add_library(qvirt-libvirt
 target_include_directories(qvirt-libvirt
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${LIBVIRT_INCLUDE_DIRS}
 )
+
+if(LIBVIRT_FOUND)
+    target_include_directories(qvirt-libvirt
+        PUBLIC
+            ${LIBVIRT_INCLUDE_DIRS}
+    )
+endif()
 
 target_link_libraries(qvirt-libvirt
     PUBLIC
@@ -47,8 +65,14 @@ target_link_libraries(qvirt-libvirt
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Xml
-        ${LIBVIRT_LIBRARIES}
 )
+
+if(LIBVIRT_FOUND)
+    target_link_libraries(qvirt-libvirt
+        PUBLIC
+            ${LIBVIRT_LIBRARIES}
+    )
+endif()
 
 # Device library
 add_library(qvirt-devices
@@ -102,8 +126,14 @@ add_library(qvirt-ui
 target_include_directories(qvirt-ui
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${LIBVIRT_INCLUDE_DIRS}
 )
+
+if(LIBVIRT_FOUND)
+    target_include_directories(qvirt-ui
+        PUBLIC
+            ${LIBVIRT_INCLUDE_DIRS}
+    )
+endif()
 
 target_link_libraries(qvirt-ui
     PUBLIC
@@ -124,13 +154,21 @@ add_executable(qvirt-manager
 target_include_directories(qvirt-manager
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${LIBVIRT_INCLUDE_DIRS}
 )
 
-target_link_directories(qvirt-manager
-    PRIVATE
-        ${LIBVIRT_LIBRARY_DIRS}
-)
+if(LIBVIRT_FOUND)
+    target_include_directories(qvirt-manager
+        PRIVATE
+            ${LIBVIRT_INCLUDE_DIRS}
+    )
+endif()
+
+if(LIBVIRT_FOUND)
+    target_link_directories(qvirt-manager
+        PRIVATE
+            ${LIBVIRT_LIBRARY_DIRS}
+    )
+endif()
 
 target_link_libraries(qvirt-manager
     PRIVATE
@@ -138,8 +176,20 @@ target_link_libraries(qvirt-manager
         qvirt-libvirt
         qvirt-devices
         qvirt-ui
-        ${LIBVIRT_LIBRARIES}
+        # Explicitly link Qt libraries to ensure proper symbol resolution on all platforms
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::UiTools
+        Qt${QT_VERSION_MAJOR}::Xml
+        Qt${QT_VERSION_MAJOR}::Network
 )
+
+if(LIBVIRT_FOUND)
+    target_link_libraries(qvirt-manager
+        PRIVATE
+            ${LIBVIRT_LIBRARIES}
+    )
+endif()
 
 # Install
 install(TARGETS qvirt-manager DESTINATION ${CMAKE_INSTALL_BINDIR})

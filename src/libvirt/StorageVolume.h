@@ -17,6 +17,11 @@
 
 #include <libvirt/libvirt.h>
 
+// Windows.h defines 'state' as a macro which breaks our code
+#ifdef _WIN32
+#undef state
+#endif
+
 typedef struct _virStorageVol virStorageVol;
 
 namespace QVirt {

@@ -17,12 +17,6 @@ if(LIBVIRT_FOUND)
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
     )
-else()
-    # Add stub libvirt headers when libvirt is not available
-    target_include_directories(qvirt-core
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/libvirt-stub
-    )
 endif()
 
 target_link_libraries(qvirt-core
@@ -61,11 +55,6 @@ if(LIBVIRT_FOUND)
     target_include_directories(qvirt-libvirt
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
-    )
-else()
-    target_include_directories(qvirt-libvirt
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/libvirt-stub
     )
 endif()
 
@@ -144,11 +133,6 @@ if(LIBVIRT_FOUND)
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
     )
-else()
-    target_include_directories(qvirt-ui
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/libvirt-stub
-    )
 endif()
 
 target_link_libraries(qvirt-ui
@@ -176,11 +160,6 @@ if(LIBVIRT_FOUND)
     target_include_directories(qvirt-manager
         PRIVATE
             ${LIBVIRT_INCLUDE_DIRS}
-    )
-else()
-    target_include_directories(qvirt-manager
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/libvirt-stub
     )
 endif()
 

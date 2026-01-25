@@ -1,2 +1,0 @@
-/usr/bin/ar qc libqvirt-core.a  CMakeFiles/qvirt-core.dir/qvirt-core_autogen/mocs_compilation.cpp.o CMakeFiles/qvirt-core.dir/core/BaseObject.cpp.o CMakeFiles/qvirt-core.dir/core/BaseUIObject.cpp.o CMakeFiles/qvirt-core.dir/core/Engine.cpp.o CMakeFiles/qvirt-core.dir/core/Error.cpp.o CMakeFiles/qvirt-core.dir/core/Config.cpp.o
-/usr/bin/ranlib libqvirt-core.a

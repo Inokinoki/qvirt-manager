@@ -29,50 +29,55 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Setup MSVC
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: x64
-
-    - name: Setup Qt
+    - name: Setup Qt for MinGW
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ matrix.qt_version }}
         host: 'windows'
         target: 'desktop'
-        arch: 'win64_msvc2019_64'
+        arch: 'mingw81_64'
         modules: ${{ matrix.modules }}
         cache: true
 
-    # Note: libvirt is disabled on Windows because building it from source
-    # is extremely difficult and requires many dependencies not available
-    # in MSYS2. Users who need libvirt on Windows can build it manually.
-    # The code has conditional support for LIBVIRT_FOUND.
+    - name: Install MSYS2 with libvirt
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: CLANG64
+        update: true
+        install: >-
+          mingw-w64-clang-x86_64-libvirt
+          mingw-w64-clang-x86_64-cc
+          mingw-w64-clang-x86_64-cmake
+          mingw-w64-clang-x86_64-ninja
+          mingw-w64-clang-x86_64-pkgconf
+          mingw-w64-clang-x86_64-python
+          tar
+          gzip
+        path-type: minimal
 
-    - name: Install vcpkg
+    - name: Build with MinGW and libvirt
+      shell: msys2 {0}
       run: |
-        git clone https://github.com/Microsoft/vcpkg.git
-        .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+        echo "=== Building with MinGW/Clang and libvirt ==="
 
-    - name: Install dependencies via vcpkg
-      run: |
-        .\vcpkg\vcpkg install pkgconf:x64-windows
-        echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "VCPKG_DEFAULT_BINARY_CACHE=$env:GITHUB_WORKSPACE\vcpkg\archives" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      timeout-minutes: 30
+        # Set Qt path for MinGW
+        export Qt_DIR="/c/Users/runneradmin/Qt/Qt${{ matrix.qt_version }}/mingw81_64"
+        export CMAKE_PREFIX_PATH="$Qt_DIR"
+        export PKG_CONFIG_PATH="/clang64/lib/pkgconfig:$PKG_CONFIG_PATH"
 
-    - name: Configure CMake
-      run: |
-        cmake -B build `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
-          -DQT_VERSION_MAJOR=${{ matrix.cmake_qt_flag }} `
-          -DCMAKE_INSTALL_PREFIX=install `
-          -DENABLE_LIBVIRT=OFF
-      continue-on-error: false
+        # Configure CMake
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DQT_VERSION_MAJOR=${{ matrix.cmake_qt_flag }} \
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
+          -DENABLE_LIBVIRT=ON
 
-    - name: Build
-      run: cmake --build build --config Release -j
+        # Build
+        cmake --build build --config Release -j$(nproc)
+
+        echo "=== Build complete ==="
       continue-on-error: false
 
     - name: Run Tests (if any)

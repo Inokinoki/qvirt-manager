@@ -1,16 +1,29 @@
 name: Windows CI
 
-on:
-  push:
-    branches: [ master, main, develop ]
-  pull_request:
-    branches: [ master, main, develop ]
-  workflow_dispatch:
+# Windows CI is disabled because libvirt does not have MSVC-compatible builds.
+# Building libvirt with MSVC is extremely difficult and requires porting many dependencies.
+# MSYS2 provides MinGW/Clang builds of libvirt, but they are not ABI-compatible with MSVC Qt.
+# Qt MinGW builds are not readily available through standard installers.
+#
+# Windows users can build the project locally with MSYS2/MinGW if they need libvirt support.
+#
+# To enable when libvirt MSVC support becomes available:
+# 1. Uncomment the 'on:' trigger below
+# 2. Ensure Qt MinGW builds are available
+# 3. Test and verify libvirt linking works
+
+# on:
+#   push:
+#     branches: [ master, main, develop ]
+#   pull_request:
+#     branches: [ master, main, develop ]
+#   workflow_dispatch:
 
 jobs:
   build:
     name: Build on Windows with Qt${{ matrix.qt_version }}
     runs-on: windows-latest
+    if: false  # Disabled - see explanation above
 
     strategy:
       matrix:

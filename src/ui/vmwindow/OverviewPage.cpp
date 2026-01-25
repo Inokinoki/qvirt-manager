@@ -132,6 +132,34 @@ void OverviewPage::setupUI()
 
     mainLayout->addWidget(m_performanceGroup);
 
+    // Performance Graphs Group
+    m_graphsGroup = new QGroupBox("Performance History", this);
+    auto *graphLayout = new QGridLayout(m_graphsGroup);
+    graphLayout->setSpacing(10);
+
+    // CPU Graph
+    m_cpuGraph = new GraphWidget(GraphWidget::GraphType::CPU, this);
+    m_cpuGraph->setTitle("CPU Usage");
+    m_cpuGraph->setGraphColor(QColor(66, 133, 244)); // Blue
+    m_cpuGraph->setMinimumHeight(150);
+    m_cpuGraph->setMaxDataPoints(60); // 60 seconds of data
+    graphLayout->addWidget(m_cpuGraph, 0, 0);
+
+    // Memory Graph
+    m_memoryGraph = new GraphWidget(GraphWidget::GraphType::Memory, this);
+    m_memoryGraph->setTitle("Memory Usage");
+    m_memoryGraph->setGraphColor(QColor(52, 168, 83)); // Green
+    m_memoryGraph->setMinimumHeight(150);
+    m_memoryGraph->setMaxDataPoints(60); // 60 seconds of data
+    graphLayout->addWidget(m_memoryGraph, 0, 1);
+
+    mainLayout->addWidget(m_graphsGroup);
+
+    // Setup graph update timer (update every 2 seconds)
+    m_graphUpdateTimer = new QTimer(this);
+    connect(m_graphUpdateTimer, &QTimer::timeout, this, &OverviewPage::refreshPerformanceGraphs);
+    m_graphUpdateTimer->start(2000);
+
     // Add stretch to push everything to the top
     mainLayout->addStretch();
 }
@@ -181,6 +209,19 @@ void OverviewPage::updateStats()
     m_memoryUsageBar->setFormat(QString("%1 MB (%2%)")
         .arg(currentMem / 1024)
         .arg(memPercent, 0, 'f', 1));
+}
+
+void OverviewPage::refreshPerformanceGraphs()
+{
+    // Update CPU graph with current usage
+    float cpuPercent = m_domain->cpuUsage();
+    m_cpuGraph->addValue(cpuPercent);
+
+    // Update memory graph with current usage percentage
+    quint64 currentMem = m_domain->currentMemory();
+    quint64 maxMem = m_domain->maxMemory();
+    float memPercent = maxMem > 0 ? (static_cast<float>(currentMem) / maxMem) * 100.0f : 0.0f;
+    m_memoryGraph->addValue(memPercent);
 }
 
 } // namespace QVirt

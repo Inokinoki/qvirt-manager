@@ -32,6 +32,8 @@
 
 namespace QVirt {
 
+class KeyboardShortcuts;
+
 /**
  * @brief Main manager window
  *

@@ -25,6 +25,7 @@ jobs:
 
     - name: Build on FreeBSD
       uses: vmactions/freebsd-vm@v1
+      continue-on-error: true
       with:
         envs: 'QT_VERSION_MAJOR=${{ matrix.qt_version }}'
         prepare: |

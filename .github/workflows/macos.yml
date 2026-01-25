@@ -19,8 +19,10 @@ jobs:
         include:
           - qt_version: '5.15.2'
             cmake_qt_flag: '5'
+            modules: ''
           - qt_version: '6.5.3'
             cmake_qt_flag: '6'
+            modules: 'qtserialport qtnetworkauth'
 
     steps:
     - name: Checkout repository
@@ -35,7 +37,7 @@ jobs:
         host: 'mac'
         target: 'desktop'
         arch: 'clang_64'
-        modules: 'qtserialport qtnetworkauth'
+        modules: ${{ matrix.modules }}
         cache: true
 
     - name: Install libvirt and dependencies via Homebrew

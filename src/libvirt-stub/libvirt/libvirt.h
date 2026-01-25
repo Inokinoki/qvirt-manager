@@ -1,5 +1,5 @@
 /**
- * @file libvirt-stub.h
+ * @file libvirt.h
  * @brief Stub definitions for building without libvirt
  *
  * This header provides minimal stub definitions when libvirt is not available.
@@ -13,17 +13,28 @@
 extern "C" {
 #endif
 
-/* Stub types */
-typedef void *virConnect;
-typedef void *virDomain;
-typedef void *virDomainPtr;
-typedef void *virConnectPtr;
-typedef void *virNetwork;
-typedef void *virStoragePool;
-typedef void *virStorageVol;
-typedef void *virNodeDevice;
-typedef void *virDomainSnapshot;
-typedef void *virStream;
+/* Stub type declarations - match real libvirt.h pattern */
+typedef struct _virConnect virConnect;
+typedef struct _virDomain virDomain;
+typedef struct _virNetwork virNetwork;
+typedef struct _virStoragePool virStoragePool;
+typedef struct _virStorageVol virStorageVol;
+typedef struct _virNodeDevice virNodeDevice;
+typedef struct _virDomainSnapshot virDomainSnapshot;
+typedef struct _virStream virStream;
+typedef struct _virTypedParameter virTypedParameter;
+typedef struct _virError virError;
+
+/* Pointer typedefs */
+typedef virConnect *virConnectPtr;
+typedef virDomain *virDomainPtr;
+typedef virNetwork *virNetworkPtr;
+typedef virStoragePool *virStoragePoolPtr;
+typedef virStorageVol *virStorageVolPtr;
+typedef virNodeDevice *virNodeDevicePtr;
+typedef virDomainSnapshot *virDomainSnapshotPtr;
+typedef virStream *virStreamPtr;
+typedef virError *virErrorPtr;
 
 /* Error handling */
 #define VIR_FROM_NONE 0
@@ -35,15 +46,13 @@ typedef void *virStream;
 #define VIR_ERR_NO_SUPPORT 50
 #define VIR_ERR_INVALID_ARG 51
 
-typedef struct {
+struct _virError {
     int code;
     int domain;
     const char *message;
     int level1;
     int level2;
-} virError;
-
-typedef void *virErrorPtr;
+};
 
 /* Connection flags */
 #define VIR_CONNECT_RO 1
@@ -80,7 +89,6 @@ typedef void *virErrorPtr;
 #define VIR_DOMAIN_AFFECT_LIVE 1
 #define VIR_DOMAIN_AFFECT_CONFIG 2
 #define VIR_DOMAIN_AFFECT_CURRENT 4
-#define VIR_DOMAIN_AFFECT_CONFIG 2
 
 /* Network flags */
 #define VIR_NETWORK_NONE 0
@@ -113,24 +121,12 @@ typedef void *virErrorPtr;
 #define VIR_DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY 2
 
 /* Key/value pairs */
-typedef void *virTypedParameter;
-#define VIR_DOMAIN_AFFECT_LIVE 1
-#define VIR_DOMAIN_AFFECT_CONFIG 2
 #define VIR_TYPED_PARAM_STRING_OKAY (1 << 7)
 
 /* CPU flags */
 #define VIR_DOMAIN_VCPU_LIVE 1
 #define VIR_DOMAIN_VCPU_CONFIG 2
 #define VIR_DOMAIN_VCPU_CURRENT 4
-
-/* Minimal inline stubs for functions that might be used */
-static inline void virConnectClose(virConnect *conn) { (void)conn; }
-static inline void virDomainFree(virDomain *domain) { (void)domain; }
-static inline void virNetworkFree(virNetwork *network) { (void)network; }
-static inline void virStoragePoolFree(virStoragePool *pool) { (void)pool; }
-static inline void virStorageVolFree(virStorageVol *vol) { (void)vol; }
-static inline void virNodeDeviceFree(virNodeDevice *dev) { (void)dev; }
-static inline void virDomainSnapshotFree(virDomainSnapshot *snap) { (void)snap; }
 
 #ifdef __cplusplus
 }

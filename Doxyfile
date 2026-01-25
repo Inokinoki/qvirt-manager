@@ -1,0 +1,92 @@
+# Doxyfile for QVirt-Manager
+
+# Project info
+PROJECT_NAME           = "QVirt-Manager"
+PROJECT_NUMBER         = 1.0.0
+PROJECT_BRIEF          = "Qt-based Virtual Machine Manager"
+
+# Output directory
+OUTPUT_DIRECTORY       = doc/api
+
+# Input files
+INPUT                  = src \
+                         doc
+
+# File patterns
+FILE_PATTERNS          = *.h \
+                         *.cpp \
+                         *.dox
+
+# Recursive scanning
+RECURSIVE              = YES
+
+# Generate HTML
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+
+# Generate XML
+GENERATE_XML           = NO
+
+# Generate LaTeX
+GENERATE_LATEX         = NO
+
+# Extract all
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+
+# Look for documentation in comments
+LOOKUP_CACHE_SIZE      = 0
+
+# Optimize output
+OPTIMIZE_OUTPUT_JAVA   = NO
+OPTIMIZE_OUTPUT_CXX   = YES
+
+# Type definitions
+TYPEDEF_HIDES_STRUCT   = NO
+
+# Syntax highlighting
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = YES
+STRIP_CODE_COMMENTS    = YES
+
+# Warnings
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+
+# Class diagrams
+HAVE_DOT               = YES
+CLASS_DIAGRAMS         = YES
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+
+# HTML settings
+HTML_TIMESTAMP         = YES
+HTML_DYNAMIC_SECTIONS  = YES
+
+# PlantUML for diagrams
+PLANTUML_JAR_PATH      =
+USE_PLANTUML           = NO
+
+# Search engine
+SEARCHENGINE           = YES
+SERVER_BASED_SEARCH    = NO
+
+# Qt settings
+QT_AUTOBRIEF           = YES
+
+# Tag files
+GENERATE_TAGFILE       = doc/api/qvirt-manager.tag
+
+# Alphabetical index
+ALPHABETICAL_INDEX     = YES
+IGNORE_PREFIX          = QVirt
+
+# Use namespaces
+NAMESPACE_BASED_INDEX  = YES

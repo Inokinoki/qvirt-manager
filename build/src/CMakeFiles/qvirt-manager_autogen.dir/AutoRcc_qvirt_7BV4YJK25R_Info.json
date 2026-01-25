@@ -1,0 +1,32 @@
+{
+	"BUILD_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen",
+	"CMAKE_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+	"CMAKE_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager",
+	"INCLUDE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/include",
+	"INPUTS" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/styles/default.qss",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/status/shutoff.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/status/paused.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/status/running.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/status/stopped.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/app/qvirt-manager.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/devices/disk.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/devices/memory.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/devices/network.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/devices/display.svg",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/icons/devices/cpu.svg"
+	],
+	"LOCK_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-manager_autogen.dir/AutoRcc_qvirt_7BV4YJK25R_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "qvirt" ],
+	"OUTPUT_CHECKSUM" : "7BV4YJK25R",
+	"OUTPUT_NAME" : "qrc_qvirt.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt5/bin/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-manager_autogen.dir/AutoRcc_qvirt_7BV4YJK25R_Used.txt",
+	"SOURCE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/resources/qvirt.qrc",
+	"VERBOSITY" : 0
+}

@@ -1,0 +1,33 @@
+Source: qvirt-manager
+Section: utils
+Priority: optional
+Maintainer: Inoki <veyx.shaw@gmail.com>
+Build-Depends: cmake (>= 3.16),
+               debhelper-compat (= 13),
+               qtbase5-dev (>= 5.9.0),
+               qttools5-dev,
+               libvirt-dev (>= 4.5.0),
+               pkg-config
+Standards-Version: 4.6.0
+Homepage: https://github.com/virt-manager/qvirt-manager
+Rules-Requires-Root: no
+
+Package: qvirt-manager
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libvirt-bin (>= 4.5.0)
+Recommends: qemu-kvm, spice-client-gtk-3.0
+Description: Qt-based virtual machine manager
+ QVirt-Manager is a Qt-based virtual machine management application.
+ It provides a graphical interface for managing libvirt VMs and KVM/QEMU
+ hypervisors. It is a modern replacement for the GTK+ virt-manager.
+ .
+ Features:
+  - VM lifecycle management (start, stop, reboot, pause)
+  - Multi-connection support
+  - Real-time performance monitoring
+  - VM creation wizard
+  - Hardware management
+  - Storage pool management
+  - Network management
+  - Snapshot support
+  - VM cloning

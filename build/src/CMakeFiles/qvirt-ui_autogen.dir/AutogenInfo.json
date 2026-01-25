@@ -1,0 +1,274 @@
+{
+	"BUILD_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen",
+	"CMAKE_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager",
+	"HEADERS" : 
+	[
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/AddHardwareDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_AddHardwareDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/CloneDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_CloneDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/ConnectionDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_ConnectionDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/DeleteDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_DeleteDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/HostDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_HostDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/NetworkDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_NetworkDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/PreferencesDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_PreferencesDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/SnapshotDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_SnapshotDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/StoragePoolDialog.h",
+			"MU",
+			"ZB24L4LU7T/moc_StoragePoolDialog.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/XMLEditor.h",
+			"MU",
+			"ZB24L4LU7T/moc_XMLEditor.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/manager/ManagerWindow.h",
+			"MU",
+			"B5QPGS6BIY/moc_ManagerWindow.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/models/ConnectionListModel.h",
+			"MU",
+			"XTPST4PFOC/moc_ConnectionListModel.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/models/VMListModel.h",
+			"MU",
+			"XTPST4PFOC/moc_VMListModel.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/ConsolePage.h",
+			"MU",
+			"5RH6ASBAJI/moc_ConsolePage.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/DetailsPage.h",
+			"MU",
+			"5RH6ASBAJI/moc_DetailsPage.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/OverviewPage.h",
+			"MU",
+			"5RH6ASBAJI/moc_OverviewPage.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/SnapshotsPage.h",
+			"MU",
+			"5RH6ASBAJI/moc_SnapshotsPage.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/VMWindow.h",
+			"MU",
+			"5RH6ASBAJI/moc_VMWindow.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/widgets/ContextMenu.h",
+			"MU",
+			"NJHUVPU35C/moc_ContextMenu.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/widgets/GraphWidget.h",
+			"MU",
+			"NJHUVPU35C/moc_GraphWidget.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/wizards/CreateVMWizard.h",
+			"MU",
+			"IZOBFUJG73/moc_CreateVMWizard.cpp"
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/include",
+	"MOC_COMPILATION_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"QT_CORE_LIB",
+		"QT_GUI_LIB",
+		"QT_NO_DEBUG",
+		"QT_UITOOLS_LIB",
+		"QT_WIDGETS_LIB",
+		"QT_XML_LIB"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+		"/usr/include/aarch64-linux-gnu/qt5",
+		"/usr/include/aarch64-linux-gnu/qt5/QtCore",
+		"/usr/lib/aarch64-linux-gnu/qt5/mkspecs/linux-g++",
+		"/usr/include/aarch64-linux-gnu/qt5/QtWidgets",
+		"/usr/include/aarch64-linux-gnu/qt5/QtGui",
+		"/usr/include/aarch64-linux-gnu/qt5/QtUiTools",
+		"/usr/include/aarch64-linux-gnu/qt5/QtXml",
+		"/usr/include/c++/9",
+		"/usr/include/aarch64-linux-gnu/c++/9",
+		"/usr/include/c++/9/backward",
+		"/usr/lib/gcc/aarch64-linux-gnu/9/include",
+		"/usr/local/include",
+		"/usr/include/aarch64-linux-gnu",
+		"/usr/include"
+	],
+	"MOC_MACRO_NAMES" : [ "Q_OBJECT", "Q_GADGET", "Q_NAMESPACE" ],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : true,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/c++",
+		"-dM",
+		"-E",
+		"-c",
+		"/usr/share/cmake-3.16/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/7BV4YJK25R/qrc_qvirt.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/mocs_compilation.cpp"
+	],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 1,
+	"PARSE_CACHE_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-ui_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/usr/lib/qt5/bin/moc",
+	"QT_UIC_EXECUTABLE" : "/usr/lib/qt5/bin/uic",
+	"QT_VERSION_MAJOR" : 5,
+	"SETTINGS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-ui_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/AddHardwareDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/CloneDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/ConnectionDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/DeleteDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/HostDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/NetworkDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/PreferencesDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/SnapshotDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/StoragePoolDialog.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/dialogs/XMLEditor.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/manager/ManagerWindow.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/models/ConnectionListModel.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/models/VMListModel.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/ConsolePage.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/DetailsPage.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/OverviewPage.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/SnapshotsPage.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/vmwindow/VMWindow.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/widgets/ContextMenu.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/widgets/GraphWidget.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/ui/wizards/CreateVMWizard.cpp",
+			"MU"
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/7BV4YJK25R/qrc_qvirt.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/mocs_compilation.cpp"
+	],
+	"UIC_UI_FILES" : [],
+	"VERBOSITY" : 0
+}

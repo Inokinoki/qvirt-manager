@@ -1,0 +1,170 @@
+{
+	"BUILD_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-libvirt_autogen",
+	"CMAKE_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager",
+	"HEADERS" : 
+	[
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Connection.h",
+			"MU",
+			"LIX7LD3JXE/moc_Connection.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Domain.h",
+			"MU",
+			"LIX7LD3JXE/moc_Domain.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/DomainSnapshot.h",
+			"MU",
+			"LIX7LD3JXE/moc_DomainSnapshot.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/EnumMapper.h",
+			"MU",
+			"LIX7LD3JXE/moc_EnumMapper.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Guest.h",
+			"MU",
+			"LIX7LD3JXE/moc_Guest.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Network.h",
+			"MU",
+			"LIX7LD3JXE/moc_Network.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/NodeDevice.h",
+			"MU",
+			"LIX7LD3JXE/moc_NodeDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/StoragePool.h",
+			"MU",
+			"LIX7LD3JXE/moc_StoragePool.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/StorageVolume.h",
+			"MU",
+			"LIX7LD3JXE/moc_StorageVolume.cpp"
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-libvirt_autogen/include",
+	"MOC_COMPILATION_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-libvirt_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"QT_CORE_LIB",
+		"QT_GUI_LIB",
+		"QT_NO_DEBUG",
+		"QT_UITOOLS_LIB",
+		"QT_WIDGETS_LIB",
+		"QT_XML_LIB"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+		"/usr/include/aarch64-linux-gnu/qt5",
+		"/usr/include/aarch64-linux-gnu/qt5/QtCore",
+		"/usr/lib/aarch64-linux-gnu/qt5/mkspecs/linux-g++",
+		"/usr/include/aarch64-linux-gnu/qt5/QtWidgets",
+		"/usr/include/aarch64-linux-gnu/qt5/QtGui",
+		"/usr/include/aarch64-linux-gnu/qt5/QtUiTools",
+		"/usr/include/aarch64-linux-gnu/qt5/QtXml",
+		"/usr/include/c++/9",
+		"/usr/include/aarch64-linux-gnu/c++/9",
+		"/usr/include/c++/9/backward",
+		"/usr/lib/gcc/aarch64-linux-gnu/9/include",
+		"/usr/local/include",
+		"/usr/include/aarch64-linux-gnu",
+		"/usr/include"
+	],
+	"MOC_MACRO_NAMES" : [ "Q_OBJECT", "Q_GADGET", "Q_NAMESPACE" ],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : true,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/c++",
+		"-dM",
+		"-E",
+		"-c",
+		"/usr/share/cmake-3.16/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-libvirt_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-devices_autogen/mocs_compilation.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/7BV4YJK25R/qrc_qvirt.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/mocs_compilation.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/mocs_compilation.cpp"
+	],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 1,
+	"PARSE_CACHE_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-libvirt_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/usr/lib/qt5/bin/moc",
+	"QT_UIC_EXECUTABLE" : "/usr/lib/qt5/bin/uic",
+	"QT_VERSION_MAJOR" : 5,
+	"SETTINGS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-libvirt_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Connection.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Domain.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/DomainSnapshot.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/EnumMapper.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Guest.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/Network.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/NodeDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/StoragePool.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/libvirt/StorageVolume.cpp",
+			"MU"
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-devices_autogen/mocs_compilation.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/7BV4YJK25R/qrc_qvirt.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/mocs_compilation.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/mocs_compilation.cpp"
+	],
+	"UIC_UI_FILES" : [],
+	"VERBOSITY" : 0
+}

@@ -1,0 +1,157 @@
+{
+	"BUILD_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-devices_autogen",
+	"CMAKE_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_SOURCE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager",
+	"HEADERS" : 
+	[
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/ControllerDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_ControllerDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/Device.h",
+			"MU",
+			"KH3RVDIA23/moc_Device.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/DiskDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_DiskDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/GraphicsDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_GraphicsDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/InputDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_InputDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/NetworkDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_NetworkDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/SoundDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_SoundDevice.cpp"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/VideoDevice.h",
+			"MU",
+			"KH3RVDIA23/moc_VideoDevice.cpp"
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-devices_autogen/include",
+	"MOC_COMPILATION_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-devices_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"QT_CORE_LIB",
+		"QT_GUI_LIB",
+		"QT_NO_DEBUG",
+		"QT_UITOOLS_LIB",
+		"QT_WIDGETS_LIB"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/src",
+		"/usr/include/aarch64-linux-gnu/qt5",
+		"/usr/include/aarch64-linux-gnu/qt5/QtCore",
+		"/usr/lib/aarch64-linux-gnu/qt5/mkspecs/linux-g++",
+		"/usr/include/aarch64-linux-gnu/qt5/QtWidgets",
+		"/usr/include/aarch64-linux-gnu/qt5/QtGui",
+		"/usr/include/aarch64-linux-gnu/qt5/QtUiTools",
+		"/usr/include/c++/9",
+		"/usr/include/aarch64-linux-gnu/c++/9",
+		"/usr/include/c++/9/backward",
+		"/usr/lib/gcc/aarch64-linux-gnu/9/include",
+		"/usr/local/include",
+		"/usr/include/aarch64-linux-gnu",
+		"/usr/include"
+	],
+	"MOC_MACRO_NAMES" : [ "Q_OBJECT", "Q_GADGET", "Q_NAMESPACE" ],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : true,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/c++",
+		"-dM",
+		"-E",
+		"-c",
+		"/usr/share/cmake-3.16/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-devices_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/7BV4YJK25R/qrc_qvirt.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/mocs_compilation.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/mocs_compilation.cpp"
+	],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 1,
+	"PARSE_CACHE_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-devices_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/usr/lib/qt5/bin/moc",
+	"QT_UIC_EXECUTABLE" : "/usr/lib/qt5/bin/uic",
+	"QT_VERSION_MAJOR" : 5,
+	"SETTINGS_FILE" : "/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/CMakeFiles/qvirt-devices_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/ControllerDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/Device.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/DiskDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/GraphicsDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/InputDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/NetworkDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/SoundDevice.cpp",
+			"MU"
+		],
+		[
+			"/home/ubuntu/Builds/virt-manager/qvirt-manager/src/devices/VideoDevice.cpp",
+			"MU"
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : 
+	[
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/7BV4YJK25R/qrc_qvirt.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-manager_autogen/mocs_compilation.cpp",
+		"/home/ubuntu/Builds/virt-manager/qvirt-manager/build/src/qvirt-ui_autogen/mocs_compilation.cpp"
+	],
+	"UIC_UI_FILES" : [],
+	"VERBOSITY" : 0
+}

@@ -15,6 +15,7 @@
 #include <QObject>
 #include <QString>
 
+#ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
 
 // Windows.h defines 'state' as a macro which breaks our code
@@ -23,6 +24,9 @@
 #endif
 
 typedef struct _virStorageVol virStorageVol;
+#else
+typedef void *virStorageVolPtr;
+#endif // LIBVIRT_FOUND
 
 namespace QVirt {
 

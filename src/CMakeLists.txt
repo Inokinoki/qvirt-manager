@@ -17,6 +17,10 @@ if(LIBVIRT_FOUND)
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
     )
+    target_compile_definitions(qvirt-core
+        PUBLIC
+            LIBVIRT_FOUND
+    )
 endif()
 
 target_link_libraries(qvirt-core
@@ -71,6 +75,10 @@ if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-libvirt
         PUBLIC
             ${LIBVIRT_LIBRARIES}
+    )
+    target_compile_definitions(qvirt-libvirt
+        PUBLIC
+            LIBVIRT_FOUND
     )
 endif()
 
@@ -132,6 +140,10 @@ if(LIBVIRT_FOUND)
     target_include_directories(qvirt-ui
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
+    )
+    target_compile_definitions(qvirt-ui
+        PUBLIC
+            LIBVIRT_FOUND
     )
 endif()
 

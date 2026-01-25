@@ -1,0 +1,9 @@
+test_core 4 0.00230056
+test_config 4 0.00221739
+test_devices 2 0.00452999
+test_enummapper 3 0.00697718
+test_graphwidget 3 0.00948707
+test_connection_lifecycle 4 1.26398
+test_vm_operations 1 5.05961
+test_ui_workflow 4 0.0113244
+---

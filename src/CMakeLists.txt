@@ -38,17 +38,23 @@ if(LIBVIRT_FOUND)
 endif()
 
 # Libvirt wrappers
-add_library(qvirt-libvirt
-    libvirt/Connection.cpp
-    libvirt/Domain.cpp
-    libvirt/DomainSnapshot.cpp
-    libvirt/Network.cpp
-    libvirt/StoragePool.cpp
-    libvirt/StorageVolume.cpp
-    libvirt/NodeDevice.cpp
-    libvirt/EnumMapper.cpp
-    libvirt/Guest.cpp
-)
+# Only add libvirt sources when libvirt is found
+if(LIBVIRT_FOUND)
+    add_library(qvirt-libvirt
+        libvirt/Connection.cpp
+        libvirt/Domain.cpp
+        libvirt/DomainSnapshot.cpp
+        libvirt/Network.cpp
+        libvirt/StoragePool.cpp
+        libvirt/StorageVolume.cpp
+        libvirt/NodeDevice.cpp
+        libvirt/EnumMapper.cpp
+        libvirt/Guest.cpp
+    )
+else()
+    # Create empty library when libvirt is not found
+    add_library(qvirt-libvirt STATIC)
+endif()
 
 target_include_directories(qvirt-libvirt
     PUBLIC

@@ -6,6 +6,10 @@ ARG QT_VERSION=6
 
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
+# Re-declare build args after FROM (they don't persist across FROM statements)
+ARG UBUNTU_VERSION
+ARG QT_VERSION
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -19,6 +23,8 @@ RUN apt-get update && apt-get install -y \
     libvirt-dev \
     wget \
     curl \
+    libgl1-mesa-dev \
+    libglvnd-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Qt5 dependencies
@@ -27,9 +33,9 @@ RUN if [ "${QT_VERSION}" = "5" ]; then \
         qtbase5-dev \
         qttools5-dev \
         qttools5-dev-tools \
-        libqt5uitools5-dev \
         qtbase5-private-dev \
-        && rm -rf /var/lib/apt/lists/*; \
+        && apt-get install -y libqt5uitools5-dev || true && \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Install Qt6 dependencies
@@ -38,8 +44,8 @@ RUN if [ "${QT_VERSION}" = "6" ]; then \
         qt6-base-dev \
         qt6-tools-dev \
         qt6-tools-dev-tools \
-        qt6-base-private-dev \
-        && rm -rf /var/lib/apt/lists/*; \
+        && apt-get install -y qt6-base-private-dev || true && \
+        rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Optional dependencies for console viewers
@@ -51,8 +57,21 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /workspace
 
-# Set Qt path for CMake
+# Detect the multiarch directory and set Qt paths for CMake
+# This ensures paths are correct for both x86_64 and ARM64 architectures
+RUN DEBIAN_MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH) && \
+    echo "Detected multiarch: $DEBIAN_MULTIARCH" && \
+    echo "export CMAKE_PREFIX_PATH=/usr/lib/$DEBIAN_MULTIARCH" > /etc/profile.d/cmake-env.sh && \
+    echo "export Qt5_DIR=/usr/lib/$DEBIAN_MULTIARCH" >> /etc/profile.d/cmake-env.sh && \
+    echo "export Qt6_DIR=/usr/lib/$DEBIAN_MULTIARCH" >> /etc/profile.d/cmake-env.sh
+
+# Set Qt selection
 ENV QT_SELECT=qt${QT_VERSION}
+
+# Source the cmake-env.sh in bashrc for all shells
+RUN if [ -f /etc/bash.bashrc ]; then \
+        echo ". /etc/profile.d/cmake-env.sh" >> /etc/bash.bashrc; \
+    fi
 
 # Verify installation
 RUN echo "Ubuntu version: ${UBUNTU_VERSION}" && \

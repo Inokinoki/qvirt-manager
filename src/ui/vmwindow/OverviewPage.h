@@ -17,8 +17,10 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QProgressBar>
+#include <QTimer>
 
 #include "../../libvirt/Domain.h"
+#include "../widgets/GraphWidget.h"
 
 namespace QVirt {
 
@@ -37,6 +39,9 @@ public:
 
     void updateInfo();
     void updateStats();
+
+private slots:
+    void refreshPerformanceGraphs();
 
 private:
     void setupUI();
@@ -72,6 +77,12 @@ private:
     QProgressBar *m_cpuUsageBar;
     QLabel *m_memoryUsageLabel;
     QProgressBar *m_memoryUsageBar;
+
+    // Performance graphs section
+    QGroupBox *m_graphsGroup;
+    GraphWidget *m_cpuGraph;
+    GraphWidget *m_memoryGraph;
+    QTimer *m_graphUpdateTimer;
 };
 
 } // namespace QVirt

@@ -17,7 +17,17 @@
 #include <QList>
 #include <QMap>
 
+#ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
+
+// Windows.h defines 'state' as a macro which breaks our code
+#ifdef _WIN32
+#undef state
+#endif
+#else
+// Forward declarations for when libvirt is not available
+typedef void *virConnectPtr;
+#endif // LIBVIRT_FOUND
 
 namespace QVirt {
 

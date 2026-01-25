@@ -48,8 +48,10 @@ else()
 endif()
 
 # Optional dependencies
-pkg_check_modules(SPICEGTK spice-client-gtk-2.0)
-pkg_check_modules(GTKVNC vnc-1.0)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(SPICEGTK spice-client-gtk-2.0)
+    pkg_check_modules(GTKVNC vnc-1.0)
+endif()
 
 # Subdirectories
 add_subdirectory(src)

@@ -15,14 +15,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        qt_version: ['5.15.2', '6.5.3']
+        qt_version: ['6.5.3']
         include:
-          - qt_version: '5.15.2'
-            cmake_qt_flag: '5'
-            modules: ''
           - qt_version: '6.5.3'
             cmake_qt_flag: '6'
             modules: 'qtserialport qtnetworkauth'
+        # Note: Qt 5.15.2 is not included because it doesn't have arm64 support
+        # Qt 6.5.3 has proper arm64 support for macOS
 
     steps:
     - name: Checkout repository

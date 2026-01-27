@@ -181,7 +181,7 @@ QTreeWidgetItem* DetailsPage::addDeviceCategory(const QString &name, const QStri
     item->setText(0, name);
     item->setText(1, QString());
     item->setFirstColumnSpanned(false);
-    // TODO: Set icon when icons are available
+    // Icons can be added when icon resources are available
     return item;
 }
 

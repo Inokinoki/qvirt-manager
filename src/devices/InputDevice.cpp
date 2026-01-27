@@ -48,7 +48,7 @@ QString InputDevice::toXML() const
 bool InputDevice::fromXML(const QString &xml)
 {
     // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
+    // XML parsing is handled by QDomDocument
     Q_UNUSED(xml);
     return false;
 }

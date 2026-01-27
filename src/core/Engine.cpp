@@ -51,8 +51,8 @@ void Engine::init()
 
 void Engine::showManager()
 {
-    // TODO: Create and show the manager window
-    // For now, we'll just emit a signal
+    // Manager window is created by main.cpp
+    // This is a placeholder for future use
     emit appClosing();
 }
 

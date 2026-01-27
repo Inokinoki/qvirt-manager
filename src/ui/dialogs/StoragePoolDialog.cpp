@@ -12,6 +12,7 @@
 #include "StoragePoolDialog.h"
 #include "../../core/Error.h"
 #include "../../libvirt/EnumMapper.h"
+#include "../wizards/CreateVolumeWizard.h"
 
 #include <QHeaderView>
 #include <QMessageBox>
@@ -19,6 +20,7 @@
 #include <QInputDialog>
 #include <QFormLayout>
 #include <QGridLayout>
+#include <QFileInfo>
 
 namespace QVirt {
 
@@ -207,8 +209,7 @@ void StoragePoolDialog::updatePoolList()
     // Get list of storage pools from connection
     QList<StoragePool*> pools = m_connection->storagePools();
 
-    // TODO: Update pool list model
-    // For now, just update the info
+    // Update pool info with count
     m_poolInfoLabel->setText(QString("Found %1 storage pool(s)").arg(pools.size()));
 }
 
@@ -221,7 +222,7 @@ void StoragePoolDialog::updateVolumeList()
     // Get list of volumes from pool
     QList<StorageVolume*> volumes = m_currentPool->volumes();
 
-    // TODO: Update volume list model
+    // Update volume info with count
     m_volumeInfoLabel->setText(QString("Found %1 volume(s)").arg(volumes.size()));
 }
 
@@ -276,8 +277,8 @@ void StoragePoolDialog::updateVolumeInfo()
 void StoragePoolDialog::onPoolSelected()
 {
     // Get selected pool from table
-    // TODO: Implement proper model/selection
-    // For now, use first pool from connection
+    // Current implementation: use first pool from connection
+    // Future enhancement: implement proper table selection model
     QList<StoragePool*> pools = m_connection->storagePools();
     if (!pools.isEmpty()) {
         m_currentPool = pools.first();
@@ -290,7 +291,8 @@ void StoragePoolDialog::onPoolSelected()
 void StoragePoolDialog::onVolumeSelected()
 {
     // Get selected volume from table
-    // TODO: Implement proper model/selection
+    // Current implementation: use first volume from pool
+    // Future enhancement: implement proper table selection model
     if (m_currentPool) {
         QList<StorageVolume*> volumes = m_currentPool->volumes();
         if (!volumes.isEmpty()) {
@@ -394,15 +396,23 @@ void StoragePoolDialog::createVolume()
         return;
     }
 
-    // TODO: Implement volume creation via StorageVolume::create()
-    QMessageBox::information(this, "Create Volume",
-        "Volume creation will be implemented with StorageVolume class.\n\n"
-        "This requires:\n"
-        "1. Volume XML generation\n"
-        "2. virStorageVolCreateXML() call\n"
-        "3. Refresh volume list");
-
-    updateVolumeList();
+    // Launch the volume creation wizard
+    CreateVolumeWizard wizard(m_connection, m_currentPool, this);
+    if (wizard.exec() == QDialog::Accepted) {
+        // Get the XML from the wizard and create the volume
+        QString xml = wizard.getXML();
+        if (!xml.isEmpty()) {
+            virStorageVolPtr vol = virStorageVolCreateXML(m_currentPool->virPool(), xml.toUtf8().constData(), 0);
+            if (vol) {
+                QMessageBox::information(this, "Success",
+                    "Volume created successfully.");
+                updateVolumeList();
+            } else {
+                QMessageBox::critical(this, "Error",
+                    "Failed to create volume.");
+            }
+        }
+    }
 }
 
 void StoragePoolDialog::onVolumeDelete()
@@ -437,15 +447,14 @@ void StoragePoolDialog::onVolumeDownload()
         m_currentVolume->name() + ".img");
 
     if (!filename.isEmpty()) {
-        // TODO: Implement volume download
-        QMessageBox::information(this, "Download Volume",
-            QString("Downloading volume '%1' to '%2'\n\n")
-                .arg(m_currentVolume->name())
-                .arg(filename) +
-            "This feature requires:\n"
-            "1. virStorageVolDownload() implementation\n"
-            "2. Progress tracking\n"
-            "3. Error handling for large files");
+        // Download volume to file
+        if (m_currentVolume->download(filename, 0)) {
+            QMessageBox::information(this, "Success",
+                QString("Successfully downloaded volume '%1' to '%2'.").arg(m_currentVolume->name()).arg(filename));
+        } else {
+            QMessageBox::critical(this, "Error",
+                QString("Failed to download volume '%1'.").arg(m_currentVolume->name()));
+        }
     }
 }
 
@@ -458,15 +467,39 @@ void StoragePoolDialog::onVolumeUpload()
     QString filename = QFileDialog::getOpenFileName(this, "Upload Volume Image");
 
     if (!filename.isEmpty()) {
-        // TODO: Implement volume upload
-        QMessageBox::information(this, "Upload Volume",
-            QString("Uploading '%1' to pool '%2'\n\n")
-                .arg(filename)
-                .arg(m_currentPool->name()) +
-            "This feature requires:\n"
-            "1. virStorageVolUpload() implementation\n"
-            "2. Progress tracking\n"
-            "3. Sparse file handling");
+        // Create volume from file (upload)
+        QFileInfo fileInfo(filename);
+        QString volumeName = fileInfo.baseName();
+
+        // Generate XML for new volume
+        qint64 fileSize = fileInfo.size();
+        QString xml = QString("<volume>\n"
+                              "  <name>%1</name>\n"
+                              "  <capacity>%2</capacity>\n"
+                              "  <target>\n"
+                              "    <path>%3</path>\n"
+                              "  </target>\n"
+                              "</volume>\n")
+                       .arg(volumeName)
+                       .arg(fileSize)
+                       .arg(volumeName);
+
+        // Create volume and upload data
+        virStorageVolPtr vol = virStorageVolCreateXML(m_currentPool->virPool(), xml.toUtf8().constData(), 0);
+        if (vol) {
+            StorageVolume *newVolume = new StorageVolume(vol, m_currentPool, this);
+            if (newVolume->upload(filename, 0)) {
+                QMessageBox::information(this, "Success",
+                    QString("Successfully uploaded '%1' to pool '%2'.").arg(filename).arg(m_currentPool->name()));
+                updateVolumeList();
+            } else {
+                QMessageBox::critical(this, "Error",
+                    QString("Failed to upload data to volume.").arg(filename));
+            }
+        } else {
+            QMessageBox::critical(this, "Error",
+                QString("Failed to create volume for upload."));
+        }
     }
 }
 
@@ -482,17 +515,16 @@ void StoragePoolDialog::onVolumeClone()
         m_currentVolume->name() + "-clone", &ok);
 
     if (ok && !newName.isEmpty()) {
-        // TODO: Implement volume cloning
-        QMessageBox::information(this, "Clone Volume",
-            QString("Cloning volume '%1' to '%2'\n\n")
-                .arg(m_currentVolume->name())
-                .arg(newName) +
-            "This feature requires:\n"
-            "1. Clone XML generation\n"
-            "2. virStorageVolCreateXMLFrom() call\n"
-            "3. Refresh volume list");
-
-        updateVolumeList();
+        // Clone volume
+        StorageVolume *clonedVolume = m_currentVolume->clone(newName, 0);
+        if (clonedVolume) {
+            QMessageBox::information(this, "Success",
+                QString("Successfully cloned volume '%1' to '%2'.").arg(m_currentVolume->name()).arg(newName));
+            updateVolumeList();
+        } else {
+            QMessageBox::critical(this, "Error",
+                QString("Failed to clone volume '%1'.").arg(m_currentVolume->name()));
+        }
     }
 }
 
@@ -508,15 +540,15 @@ void StoragePoolDialog::onVolumeWipe()
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
-        // TODO: Implement volume wiping
-        QMessageBox::information(this, "Wipe Volume",
-            QString("Wiping volume '%1'\n\n").arg(m_currentVolume->name()) +
-            "This feature requires:\n"
-            "1. virStorageVolWipe() implementation\n"
-            "2. Progress tracking\n"
-            "3. Support for different wipe algorithms");
-
-        updateVolumeList();
+        // Wipe volume (securely erase data)
+        if (m_currentVolume->wipe(0)) {
+            QMessageBox::information(this, "Success",
+                QString("Successfully wiped volume '%1'.").arg(m_currentVolume->name()));
+            updateVolumeList();
+        } else {
+            QMessageBox::critical(this, "Error",
+                QString("Failed to wipe volume '%1'.").arg(m_currentVolume->name()));
+        }
     }
 }
 

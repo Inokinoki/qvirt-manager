@@ -14,6 +14,13 @@
 #include "../../src/devices/DiskDevice.h"
 #include "../../src/devices/NetworkDevice.h"
 #include "../../src/devices/ControllerDevice.h"
+#include "../../src/devices/TPMDevice.h"
+#include "../../src/devices/HostDevice.h"
+#include "../../src/devices/FileSystemDevice.h"
+#include "../../src/devices/WatchdogDevice.h"
+#include "../../src/devices/RNGDevice.h"
+#include "../../src/devices/SmartcardDevice.h"
+#include "../../src/devices/MemballoonDevice.h"
 
 using namespace QVirt;
 
@@ -32,6 +39,20 @@ private slots:
     void testControllerDevice();
     void testControllerDeviceXML();
     void testDeviceProperties();
+    void testTPMDevice();
+    void testTPMDeviceXML();
+    void testHostDevice();
+    void testHostDeviceXML();
+    void testFileSystemDevice();
+    void testFileSystemDeviceXML();
+    void testWatchdogDevice();
+    void testWatchdogDeviceXML();
+    void testRNGDevice();
+    void testRNGDeviceXML();
+    void testSmartcardDevice();
+    void testSmartcardDeviceXML();
+    void testMemballoonDevice();
+    void testMemballoonDeviceXML();
 };
 
 void TestDevices::testDiskDevice()
@@ -129,6 +150,181 @@ void TestDevices::testDeviceProperties()
     disk.setAlias("test-alias");
 
     QCOMPARE(disk.alias(), QString("test-alias"));
+}
+
+void TestDevices::testTPMDevice()
+{
+    TPMDevice tpm;
+    tpm.setModel(TPMDevice::TPMModel::TIS);
+    tpm.setBackend(TPMDevice::TPMBackend::Emulator);
+    tpm.setVersion(TPMDevice::TPMVersion::V2_0);
+
+    QCOMPARE(tpm.model(), TPMDevice::TPMModel::TIS);
+    QCOMPARE(tpm.backend(), TPMDevice::TPMBackend::Emulator);
+    QCOMPARE(tpm.version(), TPMDevice::TPMVersion::V2_0);
+}
+
+void TestDevices::testTPMDeviceXML()
+{
+    TPMDevice tpm;
+    tpm.setModel(TPMDevice::TPMModel::TIS);
+    tpm.setBackend(TPMDevice::TPMBackend::Emulator);
+    tpm.setVersion(TPMDevice::TPMVersion::V2_0);
+
+    QString xml = tpm.toXML();
+    QVERIFY(xml.contains("<tpm"));
+    QVERIFY(xml.contains("model='tpm-tis'"));
+    QVERIFY(xml.contains("type='emulator'"));
+    QVERIFY(xml.contains("version='2.0'"));
+}
+
+void TestDevices::testHostDevice()
+{
+    HostDevice host;
+    host.setHostDeviceType(HostDevice::HostDeviceType::USB);
+    host.setUsbBus(1);
+    host.setUsbDevice(2);
+
+    QCOMPARE(host.hostDeviceType(), HostDevice::HostDeviceType::USB);
+    QCOMPARE(host.usbBus(), 1);
+    QCOMPARE(host.usbDevice(), 2);
+}
+
+void TestDevices::testHostDeviceXML()
+{
+    HostDevice host;
+    host.setHostDeviceType(HostDevice::HostDeviceType::USB);
+    host.setUsbMode(HostDevice::USBMode::Bus);
+    host.setUsbBus(1);
+    host.setUsbDevice(2);
+
+    QString xml = host.toXML();
+    QVERIFY(xml.contains("<hostdev"));
+    QVERIFY(xml.contains("type='usb'"));
+    QVERIFY(xml.contains("<source"));
+    QVERIFY(xml.contains("bus='1'"));
+    QVERIFY(xml.contains("device='2'"));
+}
+
+void TestDevices::testFileSystemDevice()
+{
+    FileSystemDevice fs;
+    fs.setDriverType(FileSystemDevice::DriverType::VirtioFS);
+    fs.setSourcePath("/host/path");
+    fs.setTargetDir("/guest/path");
+    fs.setMountTag("mytag");
+
+    QCOMPARE(fs.driverType(), FileSystemDevice::DriverType::VirtioFS);
+    QCOMPARE(fs.sourcePath(), QString("/host/path"));
+    QCOMPARE(fs.targetDir(), QString("/guest/path"));
+    QCOMPARE(fs.mountTag(), QString("mytag"));
+}
+
+void TestDevices::testFileSystemDeviceXML()
+{
+    FileSystemDevice fs;
+    fs.setDriverType(FileSystemDevice::DriverType::VirtioFS);
+    fs.setSourcePath("/host/path");
+    fs.setTargetDir("/guest/path");
+
+    QString xml = fs.toXML();
+    QVERIFY(xml.contains("<filesystem"));
+    QVERIFY(xml.contains("type='virtiofs'"));
+    QVERIFY(xml.contains("dir='/host/path'"));
+}
+
+void TestDevices::testWatchdogDevice()
+{
+    WatchdogDevice watchdog;
+    watchdog.setModel(WatchdogDevice::WatchdogModel::I6300ESB);
+    watchdog.setAction(WatchdogDevice::WatchdogAction::Reset);
+
+    QCOMPARE(watchdog.model(), WatchdogDevice::WatchdogModel::I6300ESB);
+    QCOMPARE(watchdog.action(), WatchdogDevice::WatchdogAction::Reset);
+}
+
+void TestDevices::testWatchdogDeviceXML()
+{
+    WatchdogDevice watchdog;
+    watchdog.setModel(WatchdogDevice::WatchdogModel::I6300ESB);
+    watchdog.setAction(WatchdogDevice::WatchdogAction::Reset);
+
+    QString xml = watchdog.toXML();
+    QVERIFY(xml.contains("<watchdog"));
+    QVERIFY(xml.contains("model='i6300esb'"));
+    QVERIFY(xml.contains("action='reset'"));
+}
+
+void TestDevices::testRNGDevice()
+{
+    RNGDevice rng;
+    rng.setModel(RNGDevice::RNGModel::Virtio);
+    rng.setBackend(RNGDevice::RNGBackend::Random);
+    rng.setSourcePath("/dev/urandom");
+
+    QCOMPARE(rng.model(), RNGDevice::RNGModel::Virtio);
+    QCOMPARE(rng.backend(), RNGDevice::RNGBackend::Random);
+    QCOMPARE(rng.sourcePath(), QString("/dev/urandom"));
+}
+
+void TestDevices::testRNGDeviceXML()
+{
+    RNGDevice rng;
+    rng.setModel(RNGDevice::RNGModel::Virtio);
+    rng.setBackend(RNGDevice::RNGBackend::Random);
+    rng.setSourcePath("/dev/urandom");
+
+    QString xml = rng.toXML();
+    QVERIFY(xml.contains("<rng"));
+    QVERIFY(xml.contains("model='virtio'"));
+    QVERIFY(xml.contains("type='random'"));
+    QVERIFY(xml.contains("/dev/urandom"));
+}
+
+void TestDevices::testSmartcardDevice()
+{
+    SmartcardDevice smartcard;
+    smartcard.setMode(SmartcardDevice::SmartcardMode::Host);
+    smartcard.setType(SmartcardDevice::SmartcardType::SpiceVMC);
+
+    QCOMPARE(smartcard.mode(), SmartcardDevice::SmartcardMode::Host);
+    QCOMPARE(smartcard.type(), SmartcardDevice::SmartcardType::SpiceVMC);
+}
+
+void TestDevices::testSmartcardDeviceXML()
+{
+    SmartcardDevice smartcard;
+    smartcard.setMode(SmartcardDevice::SmartcardMode::Host);
+    smartcard.setType(SmartcardDevice::SmartcardType::SpiceVMC);
+
+    QString xml = smartcard.toXML();
+    QVERIFY(xml.contains("<smartcard"));
+    QVERIFY(xml.contains("mode='host'"));
+    QVERIFY(xml.contains("spicevmc"));
+}
+
+void TestDevices::testMemballoonDevice()
+{
+    MemballoonDevice balloon;
+    balloon.setModel(MemballoonDevice::MemballoonModel::Virtio);
+    balloon.setAutodeflate(true);
+    balloon.setPeriod(5);
+
+    QCOMPARE(balloon.model(), MemballoonDevice::MemballoonModel::Virtio);
+    QCOMPARE(balloon.autodeflate(), true);
+    QCOMPARE(balloon.period(), 5);
+}
+
+void TestDevices::testMemballoonDeviceXML()
+{
+    MemballoonDevice balloon;
+    balloon.setModel(MemballoonDevice::MemballoonModel::Virtio);
+    balloon.setAutodeflate(true);
+
+    QString xml = balloon.toXML();
+    QVERIFY(xml.contains("<memballoon"));
+    QVERIFY(xml.contains("model='virtio'"));
+    QVERIFY(xml.contains("autodeflate='on'"));
 }
 
 QTEST_MAIN(TestDevices)

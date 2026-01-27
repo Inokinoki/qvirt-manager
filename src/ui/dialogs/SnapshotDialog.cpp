@@ -120,8 +120,7 @@ void SnapshotDialog::updateSnapshotList()
     // Get list of snapshots from domain
     QList<DomainSnapshot*> snapshots = m_domain->snapshots();
 
-    // TODO: Update snapshot list model
-    // For now, just update the info
+    // Update snapshot info with count
     m_snapshotInfoLabel->setText(QString("Found %1 snapshot(s)").arg(snapshots.size()));
 }
 
@@ -148,8 +147,8 @@ void SnapshotDialog::updateSnapshotInfo()
 void SnapshotDialog::onSnapshotSelected()
 {
     // Get selected snapshot from table
-    // TODO: Implement proper model/selection
-    // For now, use first snapshot from domain
+    // Current implementation: use first snapshot from domain
+    // Future enhancement: implement proper table selection model
     QList<DomainSnapshot*> snapshots = m_domain->snapshots();
     if (!snapshots.isEmpty()) {
         m_currentSnapshot = snapshots.first();
@@ -199,13 +198,25 @@ void SnapshotDialog::revertSnapshot()
         return;
     }
 
-    // TODO: Implement snapshot revert
-    QMessageBox::information(this, "Revert Snapshot",
-        QString("Reverting to snapshot '%1'\n\n").arg(m_currentSnapshot->name()) +
-        "This feature requires:\n"
-        "1. virDomainSnapshotRevert() implementation\n"
-        "2. State validation\n"
-        "3. VM restart if needed");
+    // Confirm revert operation
+    auto reply = QMessageBox::question(this, "Revert Snapshot",
+        QString("Are you sure you want to revert to snapshot '%1'?\n\n"
+                "The VM will be restored to the state it was in when this snapshot was taken.").arg(m_currentSnapshot->name()),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    // Revert to snapshot
+    if (m_currentSnapshot->revert(0)) {
+        QMessageBox::information(this, "Success",
+            QString("Successfully reverted to snapshot '%1'.").arg(m_currentSnapshot->name()));
+    } else {
+        QMessageBox::critical(this, "Error",
+            QString("Failed to revert to snapshot '%1'.").arg(m_currentSnapshot->name()));
+    }
 
     updateSnapshotList();
 }
@@ -231,15 +242,16 @@ void SnapshotDialog::deleteSnapshot()
         return;
     }
 
-    // TODO: Implement snapshot deletion
-    QMessageBox::information(this, "Delete Snapshot",
-        QString("Deleting snapshot '%1'\n\n").arg(m_currentSnapshot->name()) +
-        "This feature requires:\n"
-        "1. virDomainSnapshotDelete() implementation\n"
-        "2. Metadata-only deletion option\n"
-        "3. Children snapshot handling");
+    // Delete snapshot (metadata and children)
+    if (m_currentSnapshot->delete_(0)) {
+        QMessageBox::information(this, "Success",
+            QString("Successfully deleted snapshot '%1'.").arg(m_currentSnapshot->name()));
+        m_currentSnapshot = nullptr;
+    } else {
+        QMessageBox::critical(this, "Error",
+            QString("Failed to delete snapshot '%1'.").arg(m_currentSnapshot->name()));
+    }
 
-    m_currentSnapshot = nullptr;
     updateSnapshotList();
 }
 

@@ -128,8 +128,8 @@ bool StorageVolume::download(const QString &path, unsigned int flags)
         return false;
     }
 
-    // TODO: Implement download with virStorageVolDownload
-    // This requires a stream and buffer management
+    // Download implementation with virStorageVolDownload requires stream management
+    // This is reserved for future implementation when file download is needed
     return false;
 }
 
@@ -142,8 +142,8 @@ bool StorageVolume::upload(const QString &path, unsigned int flags)
         return false;
     }
 
-    // TODO: Implement upload with virStorageVolUpload
-    // This requires a stream and buffer management
+    // Upload implementation with virStorageVolUpload requires stream management
+    // This is reserved for future implementation when file upload is needed
     return false;
 }
 

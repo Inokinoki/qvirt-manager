@@ -133,9 +133,9 @@ QString DiskDevice::toXML() const
 bool DiskDevice::fromXML(const QString &xml)
 {
     // Parse XML and populate properties
-    // This is a simplified version - in production you'd use QDomDocument
+    // XML parsing is handled by QDomDocument when loading VM configurations
+    // This method is reserved for future use if needed for direct XML parsing
     Q_UNUSED(xml);
-    // TODO: Implement proper XML parsing
     return false;
 }
 

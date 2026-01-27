@@ -75,7 +75,10 @@ private:
         HostDevice,
         Filesystem,
         TPM,
-        RNG
+        RNG,
+        Watchdog,
+        Smartcard,
+        Memballoon
     };
 };
 
@@ -241,6 +244,161 @@ private:
     void setupUI();
 
     QComboBox *m_modelCombo;
+};
+
+/**
+ * @brief TPM device configuration page
+ */
+class TPMDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit TPMDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modelCombo;
+    QComboBox *m_backendCombo;
+    QComboBox *m_versionCombo;
+    QLineEdit *m_devicePathEdit;
+};
+
+/**
+ * @brief Host device configuration page
+ */
+class HostDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit HostDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_deviceTypeCombo;
+    QComboBox *m_usbModeCombo;
+    QSpinBox *m_usbBusSpin;
+    QSpinBox *m_usbDeviceSpin;
+    QLineEdit *m_vendorIdEdit;
+    QLineEdit *m_productIdEdit;
+};
+
+/**
+ * @brief Filesystem device configuration page
+ */
+class FileSystemDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit FileSystemDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_driverCombo;
+    QLineEdit *m_sourcePathEdit;
+    QLineEdit *m_targetDirEdit;
+    QLineEdit *m_mountTagEdit;
+    QComboBox *m_accessModeCombo;
+    QCheckBox *m_readonlyCheck;
+};
+
+/**
+ * @brief Watchdog device configuration page
+ */
+class WatchdogDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit WatchdogDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modelCombo;
+    QComboBox *m_actionCombo;
+};
+
+/**
+ * @brief RNG device configuration page
+ */
+class RNGDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit RNGDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modelCombo;
+    QComboBox *m_backendCombo;
+    QLineEdit *m_sourcePathEdit;
+};
+
+/**
+ * @brief Smartcard device configuration page
+ */
+class SmartcardDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit SmartcardDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modeCombo;
+    QComboBox *m_typeCombo;
+    QLineEdit *m_databaseEdit;
+    QLineEdit *m_sourcePathEdit;
+};
+
+/**
+ * @brief Memballoon device configuration page
+ */
+class MemballoonDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit MemballoonDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modelCombo;
+    QCheckBox *m_autodeflateCheck;
+    QCheckBox *m_deflateOnOOMCheck;
+    QSpinBox *m_periodSpin;
 };
 
 } // namespace QVirt

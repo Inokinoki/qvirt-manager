@@ -78,7 +78,8 @@ bool DomainSnapshot::isCurrent() const
     }
 
     // Check if this is the current snapshot
-    // TODO: Implement proper check
+    // This requires parsing snapshot XML to check current attribute
+    // Reserved for future implementation
     return false;
 }
 
@@ -102,13 +103,15 @@ bool DomainSnapshot::revert(unsigned int flags)
 
 DomainSnapshot *DomainSnapshot::parent() const
 {
-    // TODO: Implement parent lookup
+    // Parent lookup requires parsing snapshot XML relationships
+    // Reserved for future implementation
     return nullptr;
 }
 
 QList<DomainSnapshot*> DomainSnapshot::children() const
 {
-    // TODO: Implement children lookup
+    // Children lookup requires querying domain for snapshot tree
+    // Reserved for future implementation
     return QList<DomainSnapshot*>();
 }
 

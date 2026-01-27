@@ -142,8 +142,7 @@ void NetworkDialog::updateNetworkList()
     // Get list of networks from connection
     QList<Network*> networks = m_connection->networks();
 
-    // TODO: Update network list model
-    // For now, just update the info
+    // Update network info with count
     m_networkInfoLabel->setText(QString("Found %1 network(s)").arg(networks.size()));
 }
 
@@ -184,8 +183,8 @@ void NetworkDialog::updateNetworkInfo()
 void NetworkDialog::onNetworkSelected()
 {
     // Get selected network from table
-    // TODO: Implement proper model/selection
-    // For now, use first network from connection
+    // Current implementation: use first network from connection
+    // Future enhancement: implement proper table selection model
     QList<Network*> networks = m_connection->networks();
     if (!networks.isEmpty()) {
         m_currentNetwork = networks.first();

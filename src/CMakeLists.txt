@@ -74,6 +74,26 @@ if(LIBVIRT_FOUND)
     )
 endif()
 
+# Console library
+add_library(qvirt-console
+    console/Viewer.cpp
+    console/VNCViewer.cpp
+    console/SpiceViewer.cpp
+)
+
+target_include_directories(qvirt-console
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(qvirt-console
+    PUBLIC
+        qvirt-core
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Gui
+)
+
 # Device library
 add_library(qvirt-devices
     devices/Device.cpp
@@ -84,6 +104,13 @@ add_library(qvirt-devices
     devices/GraphicsDevice.cpp
     devices/VideoDevice.cpp
     devices/SoundDevice.cpp
+    devices/TPMDevice.cpp
+    devices/HostDevice.cpp
+    devices/FileSystemDevice.cpp
+    devices/WatchdogDevice.cpp
+    devices/RNGDevice.cpp
+    devices/SmartcardDevice.cpp
+    devices/MemballoonDevice.cpp
 )
 
 target_include_directories(qvirt-devices
@@ -111,6 +138,7 @@ add_library(qvirt-ui
     ui/dialogs/NetworkDialog.cpp
     ui/dialogs/SnapshotDialog.cpp
     ui/dialogs/CloneDialog.cpp
+    ui/dialogs/MigrateDialog.cpp
     ui/dialogs/PreferencesDialog.cpp
     ui/dialogs/XMLEditor.cpp
     ui/widgets/GraphWidget.cpp
@@ -121,6 +149,9 @@ add_library(qvirt-ui
     ui/vmwindow/ConsolePage.cpp
     ui/vmwindow/SnapshotsPage.cpp
     ui/wizards/CreateVMWizard.cpp
+    ui/wizards/CreatePoolDialog.cpp
+    ui/wizards/CreateNetworkWizard.cpp
+    ui/wizards/CreateVolumeWizard.cpp
 )
 
 target_include_directories(qvirt-ui
@@ -139,6 +170,8 @@ target_link_libraries(qvirt-ui
     PUBLIC
         qvirt-core
         qvirt-libvirt
+        qvirt-console
+        qvirt-devices
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::UiTools

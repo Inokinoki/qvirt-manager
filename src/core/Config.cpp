@@ -64,6 +64,28 @@ bool Config::connAutoconnect(const QString &uri) const
     return m_settings.value(QString("Connection/%1/autoconnect").arg(uri), false).toBool();
 }
 
+void Config::setConnSSHKeyPath(const QString &uri, const QString &keyPath)
+{
+    m_settings.setValue(QString("Connection/%1/sshKeyPath").arg(uri), keyPath);
+    emit valueChanged(QString("Connection/%1/sshKeyPath").arg(uri));
+}
+
+QString Config::connSSHKeyPath(const QString &uri) const
+{
+    return m_settings.value(QString("Connection/%1/sshKeyPath").arg(uri), QString()).toString();
+}
+
+void Config::setConnSSHUsername(const QString &uri, const QString &username)
+{
+    m_settings.setValue(QString("Connection/%1/sshUsername").arg(uri), username);
+    emit valueChanged(QString("Connection/%1/sshUsername").arg(uri));
+}
+
+QString Config::connSSHUsername(const QString &uri) const
+{
+    return m_settings.value(QString("Connection/%1/sshUsername").arg(uri), QString()).toString();
+}
+
 // Per-VM settings
 void Config::setVMWindowSize(const QString &uri, const QString &uuid, const QSize &size)
 {

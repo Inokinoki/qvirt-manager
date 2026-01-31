@@ -105,6 +105,7 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_conn(nullptr)
     , m_tickCounter(0)
     , m_initialPoll(true)
+    , m_sshKeyPath(sshKeyPath)
 {
 #ifdef LIBVIRT_FOUND
     // Set up authentication data
@@ -116,6 +117,17 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     // or rely on SSH config. The user should configure SSH config properly.
     if (!sshKeyPath.isEmpty()) {
         qputenv("LIBVIRT_SSH_KEY_PATH", sshKeyPath.toUtf8());
+    }
+
+    // Extract username from URI for persistence
+    // URI format: qemu+ssh://[username@]hostname[:port]/system
+    QString uriCopy = uri;
+    if (uriCopy.contains("://")) {
+        QString authPart = uriCopy.split("://")[1];
+        authPart = authPart.split("/")[0]; // Remove /system part
+        if (authPart.contains("@")) {
+            m_sshUsername = authPart.split("@")[0];
+        }
     }
 
     // Attempt to open the connection with auth

@@ -46,6 +46,13 @@ public:
     void setConnAutoconnect(const QString &uri, bool autoconnect);
     bool connAutoconnect(const QString &uri) const;
 
+    // SSH credentials for connections
+    void setConnSSHKeyPath(const QString &uri, const QString &keyPath);
+    QString connSSHKeyPath(const QString &uri) const;
+
+    void setConnSSHUsername(const QString &uri, const QString &username);
+    QString connSSHUsername(const QString &uri) const;
+
     // Per-VM settings
     void setVMWindowSize(const QString &uri, const QString &uuid, const QSize &size);
     QSize vmWindowSize(const QString &uri, const QString &uuid, const QSize &defaultSize = QSize(800, 600)) const;

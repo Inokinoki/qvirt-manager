@@ -25,6 +25,7 @@
 #include "../../libvirt/EnumMapper.h"
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QMenu>
 #include <QStatusBar>
 #include <QFile>
 #include <QApplication>
@@ -44,15 +45,27 @@ ManagerWindow::ManagerWindow(QWidget *parent)
     connectSignals();
     setupKeyboardShortcuts();
 
-    // Auto-connect to default URI if configured
+    // Load all saved connections (even disconnected ones)
     Config *config = Config::instance();
     QStringList uris = config->connectionURIs();
     for (const QString &uri : uris) {
-        if (config->connAutoconnect(uri)) {
-            Connection *conn = Connection::open(uri);
+        // Add to model as disconnected first
+        bool autoconnect = config->connAutoconnect(uri);
+        m_connectionModel->addDisconnectedConnection(uri, autoconnect);
+
+        // Try to auto-connect if configured
+        if (autoconnect) {
+            // Load saved SSH credentials
+            QString sshKeyPath = config->connSSHKeyPath(uri);
+            QString sshUsername = config->connSSHUsername(uri);
+
+            // Note: We don't save passwords for security (user would need to re-enter)
+            // In production, use QtKeychain or similar for secure password storage
+            Connection *conn = Connection::open(uri, sshKeyPath, QString());
             if (conn) {
                 addConnection(conn);
             }
+            // If connection fails, it remains in the list as disconnected (shown in gray)
         }
     }
 
@@ -86,10 +99,11 @@ void ManagerWindow::setupUI()
     m_connectionList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_connectionList->horizontalHeader()->setStretchLastSection(true);
     m_connectionList->verticalHeader()->setVisible(false);
+    m_connectionList->setContextMenuPolicy(Qt::CustomContextMenu);
 
     leftLayout->addWidget(m_connectionList);
 
-    QPushButton *btnAddConn = new QPushButton(tr("Add Connection"));
+    QPushButton *btnAddConn = new QPushButton(tr("Add"));
     connect(btnAddConn, &QPushButton::clicked, this, &ManagerWindow::openConnectionDialog);
     leftLayout->addWidget(btnAddConn);
 
@@ -327,6 +341,10 @@ void ManagerWindow::connectSignals()
     connect(m_connectionList->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &ManagerWindow::onConnectionSelectionChanged);
 
+    // Connection list context menu
+    connect(m_connectionList, &QTableView::customContextMenuRequested,
+            this, &ManagerWindow::onConnectionContextMenu);
+
     // Button connections
     connect(m_btnNewVM, &QPushButton::clicked, this, &ManagerWindow::onNewVM);
     connect(m_btnStart, &QPushButton::clicked, this, &ManagerWindow::onVMStarted);
@@ -385,6 +403,20 @@ void ManagerWindow::addConnection(Connection *conn)
     m_connectionModel->addConnection(conn);
     m_vmModel->addConnection(conn);
 
+    // Automatically persist SSH credentials for remote connections
+    Config *config = Config::instance();
+    QString uri = conn->uri();
+
+    // Save SSH key path if the connection has one
+    if (!conn->sshKeyPath().isEmpty()) {
+        config->setConnSSHKeyPath(uri, conn->sshKeyPath());
+    }
+
+    // Save SSH username if the connection has one
+    if (!conn->sshUsername().isEmpty()) {
+        config->setConnSSHUsername(uri, conn->sshUsername());
+    }
+
     m_statusLabel->setText(tr("Connected to: %1").arg(conn->uri()));
     updateVMControls();
 
@@ -403,13 +435,18 @@ void ManagerWindow::removeConnection(Connection *conn)
         return;
     }
 
+    QString uri = conn->uri();
+
     // Unregister connection from Engine
     Engine::instance()->unregisterConnection(conn);
 
     m_connectionModel->removeConnection(conn);
     m_vmModel->removeConnection(conn);
 
-    m_statusLabel->setText(tr("Disconnected from: %1").arg(conn->uri()));
+    // Add back as disconnected so it remains in the sidebar
+    m_connectionModel->addDisconnectedConnection(uri, false);
+
+    m_statusLabel->setText(tr("Disconnected from: %1").arg(uri));
     updateVMControls();
 }
 
@@ -565,7 +602,7 @@ void ManagerWindow::openConnectionDialog()
             if (conn) {
                 addConnection(conn);
 
-                // Save to config
+                // Save to config (credentials are automatically persisted in addConnection)
                 Config *config = Config::instance();
                 config->addConnectionURI(uri);
                 config->setConnAutoconnect(uri, dialog.autoconnect());
@@ -702,6 +739,158 @@ void ManagerWindow::applyStylesheet()
             qApp->setStyleSheet(style);
             fsFile.close();
         }
+    }
+}
+
+void ManagerWindow::onConnectionContextMenu(const QPoint &pos)
+{
+    QModelIndex index = m_connectionList->indexAt(pos);
+    if (!index.isValid()) {
+        return;
+    }
+
+    int row = index.row();
+    Connection *conn = m_connectionModel->connectionAt(row);
+    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+
+    QString uri;
+    bool isConnected = false;
+
+    if (conn) {
+        uri = conn->uri();
+        isConnected = (conn->state() == Connection::Active);
+    } else if (info) {
+        uri = info->uri;
+        isConnected = false;
+    } else {
+        return;
+    }
+
+    QMenu menu(this);
+
+    if (isConnected) {
+        QAction *disconnectAction = menu.addAction(tr("Disconnect"));
+        connect(disconnectAction, &QAction::triggered, this, &ManagerWindow::onDisconnectFromConnection);
+    } else {
+        QAction *connectAction = menu.addAction(tr("Connect"));
+        connect(connectAction, &QAction::triggered, this, &ManagerWindow::onConnectToConnection);
+    }
+
+    menu.addSeparator();
+
+    QAction *editAction = menu.addAction(tr("Edit..."));
+    connect(editAction, &QAction::triggered, this, &ManagerWindow::onEditConnection);
+
+    QAction *deleteAction = menu.addAction(tr("Delete"));
+    deleteAction->setEnabled(true);
+    connect(deleteAction, &QAction::triggered, this, &ManagerWindow::onDeleteConnection);
+
+    menu.exec(m_connectionList->viewport()->mapToGlobal(pos));
+}
+
+void ManagerWindow::onConnectToConnection()
+{
+    QModelIndex index = m_connectionList->currentIndex();
+    if (!index.isValid()) {
+        return;
+    }
+
+    int row = index.row();
+    Connection *conn = m_connectionModel->connectionAt(row);
+    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+
+    QString uri;
+    if (conn) {
+        uri = conn->uri();
+    } else if (info) {
+        uri = info->uri;
+    } else {
+        return;
+    }
+
+    // Load saved credentials from config
+    Config *config = Config::instance();
+    QString sshKeyPath = config->connSSHKeyPath(uri);
+    QString sshUsername = config->connSSHUsername(uri);
+
+    // Try to connect
+    Connection *newConn = Connection::open(uri, sshKeyPath, QString());
+    if (newConn) {
+        addConnection(newConn);
+        m_statusLabel->setText(tr("Connected to: %1").arg(uri));
+    } else {
+        QMessageBox::warning(this, tr("Connection Failed"),
+            tr("Failed to connect to: %1").arg(uri));
+    }
+}
+
+void ManagerWindow::onDisconnectFromConnection()
+{
+    QModelIndex index = m_connectionList->currentIndex();
+    if (!index.isValid()) {
+        return;
+    }
+
+    Connection *conn = m_connectionModel->connectionAt(index.row());
+    if (!conn) {
+        return;
+    }
+
+    QString uri = conn->uri();
+    removeConnection(conn);
+    m_statusLabel->setText(tr("Disconnected from: %1").arg(uri));
+}
+
+void ManagerWindow::onEditConnection()
+{
+    // For now, show a message that editing is not yet implemented
+    // In a full implementation, this would open the connection dialog with pre-filled values
+    QMessageBox::information(this, tr("Edit Connection"),
+        tr("Connection editing will be implemented in a future version.\n\n"
+           "To modify a connection, you can delete it and add a new one."));
+}
+
+void ManagerWindow::onDeleteConnection()
+{
+    QModelIndex index = m_connectionList->currentIndex();
+    if (!index.isValid()) {
+        return;
+    }
+
+    int row = index.row();
+    Connection *conn = m_connectionModel->connectionAt(row);
+    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+
+    QString uri;
+    if (conn) {
+        uri = conn->uri();
+    } else if (info) {
+        uri = info->uri;
+    } else {
+        return;
+    }
+
+    // Confirm deletion
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        tr("Delete Connection"),
+        tr("Are you sure you want to delete the connection '%1'?").arg(uri),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (reply == QMessageBox::Yes) {
+        // Remove from config
+        Config *config = Config::instance();
+        config->removeConnectionURI(uri);
+
+        // Remove from model
+        if (conn) {
+            removeConnection(conn);
+            // Also remove the disconnected entry that was added back
+            m_connectionModel->removeDisconnectedConnection(uri);
+        } else if (info) {
+            m_connectionModel->removeDisconnectedConnection(uri);
+        }
+
+        m_statusLabel->setText(tr("Connection deleted: %1").arg(uri));
     }
 }
 

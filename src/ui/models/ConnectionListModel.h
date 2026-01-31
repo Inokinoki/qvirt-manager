@@ -14,15 +14,28 @@
 
 #include <QAbstractListModel>
 #include <QList>
+#include <QSet>
 
 #include "../../libvirt/Connection.h"
 
 namespace QVirt {
 
 /**
+ * @brief Information about a connection (for disconnected connections)
+ */
+struct ConnectionInfo {
+    QString uri;
+    bool autoconnect;
+
+    ConnectionInfo(const QString &u = QString(), bool autoconnect = false)
+        : uri(u), autoconnect(autoconnect) {}
+};
+
+/**
  * @brief Qt model for displaying list of libvirt connections
  *
  * Provides a Qt Model/View interface for connections
+ * Supports both active Connection objects and disconnected ConnectionInfo
  */
 class ConnectionListModel : public QAbstractListModel
 {
@@ -35,7 +48,9 @@ public:
         HostnameRole,
         DomainCountRole,
         NetworkCountRole,
-        StoragePoolCountRole
+        StoragePoolCountRole,
+        IsConnectedRole,
+        AutoconnectRole
     };
 
     explicit ConnectionListModel(QObject *parent = nullptr);
@@ -49,9 +64,17 @@ public:
     // Connection management
     void addConnection(Connection *conn);
     void removeConnection(Connection *conn);
+    void addDisconnectedConnection(const QString &uri, bool autoconnect = false);
+    void removeDisconnectedConnection(const QString &uri);
+
+    // Get connection at index (may return nullptr for disconnected)
     Connection* connectionAt(int index) const;
     Connection* connectionByURI(const QString &uri) const;
+    ConnectionInfo* connectionInfoAt(int index) const;
     QList<Connection*> connections() const;
+
+    // Check if connection exists (connected or disconnected)
+    bool hasConnection(const QString &uri) const;
 
     // Update signals from connections
     void onConnectionStateChanged(Connection::State state);
@@ -60,6 +83,8 @@ public:
 
 private:
     QList<Connection*> m_connections;
+    QList<ConnectionInfo*> m_disconnectedConnections; // For disconnected connections
+    QSet<QString> m_allURIs; // Track all URIs to prevent duplicates
 };
 
 } // namespace QVirt

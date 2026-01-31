@@ -97,6 +97,10 @@ public:
     QString capabilities() const;
     QString libvirtVersion() const;
 
+    // SSH credentials (stored for persistence)
+    QString sshKeyPath() const { return m_sshKeyPath; }
+    QString sshUsername() const { return m_sshUsername; }
+
 signals:
     void stateChanged(State newState);
     void domainAdded(Domain *domain);
@@ -127,6 +131,10 @@ private:
 
     int m_tickCounter;
     bool m_initialPoll;
+
+    // SSH credentials (for persistence)
+    QString m_sshKeyPath;
+    QString m_sshUsername;
 
     // Object caches
     QMap<QString, Domain *> m_domains;

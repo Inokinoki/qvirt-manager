@@ -46,12 +46,12 @@ int main(int argc, char *argv[])
     }
 
     // Load application stylesheet
-    QFile stylesheet(":/styles/default.qss");
-    if (stylesheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QString style = QString::fromUtf8(stylesheet.readAll());
-        app.setStyleSheet(style);
-        stylesheet.close();
-    }
+    // QFile stylesheet(":/styles/default.qss");
+    // if (stylesheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    //     QString style = QString::fromUtf8(stylesheet.readAll());
+    //     app.setStyleSheet(style);
+    //     stylesheet.close();
+    // }
 
     // Initialize engine
     auto *engine = QVirt::Engine::instance();

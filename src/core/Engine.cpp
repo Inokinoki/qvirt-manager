@@ -56,6 +56,22 @@ void Engine::showManager()
     emit appClosing();
 }
 
+void Engine::registerConnection(Connection *conn)
+{
+    if (!conn) {
+        return;
+    }
+    m_connections[conn->uri()] = conn;
+}
+
+void Engine::unregisterConnection(Connection *conn)
+{
+    if (!conn) {
+        return;
+    }
+    m_connections.remove(conn->uri());
+}
+
 void Engine::onTick()
 {
     // Update all connections
@@ -63,7 +79,7 @@ void Engine::onTick()
     for (auto *conn : m_connections) {
         if (conn) {
             // Trigger connection tick
-            // conn->tick();
+            conn->tick();
         }
     }
 }

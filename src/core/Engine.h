@@ -53,6 +53,18 @@ public:
      */
     void showManager();
 
+    /**
+     * @brief Register a connection with the engine
+     * @param conn Connection to register
+     */
+    void registerConnection(Connection *conn);
+
+    /**
+     * @brief Unregister a connection from the engine
+     * @param conn Connection to unregister
+     */
+    void unregisterConnection(Connection *conn);
+
 signals:
     /**
      * @brief Emitted when the application is closing

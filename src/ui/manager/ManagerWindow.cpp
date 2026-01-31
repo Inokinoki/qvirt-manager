@@ -379,11 +379,22 @@ void ManagerWindow::addConnection(Connection *conn)
         return;
     }
 
+    // Register connection with Engine so it gets tick() calls
+    Engine::instance()->registerConnection(conn);
+
     m_connectionModel->addConnection(conn);
     m_vmModel->addConnection(conn);
 
     m_statusLabel->setText(tr("Connected to: %1").arg(conn->uri()));
     updateVMControls();
+
+    // Auto-select the newly added connection
+    int rowCount = m_connectionModel->rowCount();
+    if (rowCount > 0) {
+        QModelIndex lastIndex = m_connectionModel->index(rowCount - 1, 0);
+        m_connectionList->selectRow(lastIndex.row());
+        // selectRow() will trigger onConnectionSelectionChanged() via the signal/slot connection
+    }
 }
 
 void ManagerWindow::removeConnection(Connection *conn)
@@ -391,6 +402,9 @@ void ManagerWindow::removeConnection(Connection *conn)
     if (!conn) {
         return;
     }
+
+    // Unregister connection from Engine
+    Engine::instance()->unregisterConnection(conn);
 
     m_connectionModel->removeConnection(conn);
     m_vmModel->removeConnection(conn);
@@ -546,7 +560,8 @@ void ManagerWindow::openConnectionDialog()
     if (dialog.exec() == QDialog::Accepted) {
         QString uri = dialog.uri();
         if (!uri.isEmpty()) {
-            Connection *conn = Connection::open(uri);
+            // Pass SSH credentials if provided
+            Connection *conn = Connection::open(uri, dialog.sshKeyPath(), dialog.sshPassword());
             if (conn) {
                 addConnection(conn);
 

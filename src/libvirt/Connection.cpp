@@ -17,6 +17,63 @@
 #include "../core/Error.h"
 #include <QDebug>
 
+#ifdef LIBVIRT_FOUND
+#include <libvirt/libvirt.h>
+
+// Windows.h defines 'state' as a macro which breaks our code
+#ifdef _WIN32
+#undef state
+#endif
+
+// Auth callback data structure
+struct ConnectionAuthData {
+    QString password;
+    QString sshKeyPath;
+};
+
+// Libvirt auth callback function
+static int virConnectAuthCallback(virConnectCredentialPtr cred, unsigned int ncred, void *cbdata)
+{
+    auto *authData = static_cast<ConnectionAuthData *>(cbdata);
+
+    for (unsigned int i = 0; i < ncred; ++i) {
+        if (cred[i].type == VIR_CRED_PASSPHRASE || cred[i].type == VIR_CRED_NOECHOPROMPT) {
+            // Use provided password if available
+            if (!authData->password.isEmpty()) {
+                cred[i].result = strdup(authData->password.toUtf8().constData());
+                if (!cred[i].result) {
+                    return -1;
+                }
+                cred[i].resultlen = strlen(cred[i].result);
+            } else {
+                // No password provided, request it
+                return -1;
+            }
+        } else if (cred[i].type == VIR_CRED_EXTERNAL) {
+            // External auth method (e.g., SSH agent)
+            if (cred[i].prompt && strcmp(cred[i].prompt, "Auth Name") == 0) {
+                // For SSH key auth, we can set the SSH_AUTH_SOCK environment variable
+                // or the user can configure it in ~/.ssh/config
+                // The sshKeyPath would typically be used via SSH config
+                continue;
+            }
+        } else {
+            // Unsupported credential type
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// Auth callback struct for libvirt
+static virConnectAuth authHelper = {
+    .cb = virConnectAuthCallback,
+    .cbdata = nullptr,
+    .credtype = nullptr,
+    .ncredtype = 0
+};
+#endif
+
 namespace QVirt {
 
 Connection::Connection(const QString &uri)
@@ -27,7 +84,7 @@ Connection::Connection(const QString &uri)
     , m_tickCounter(0)
     , m_initialPoll(true)
 {
-    // Attempt to open the connection
+    // Attempt to open the connection (no auth)
     m_conn = virConnectOpen(uri.toUtf8().constData());
 
     if (m_conn) {
@@ -41,14 +98,68 @@ Connection::Connection(const QString &uri)
     }
 }
 
+Connection::Connection(const QString &uri, const QString &sshKeyPath, const QString &password)
+    : BaseObject()
+    , m_uri(uri)
+    , m_state(Disconnected)
+    , m_conn(nullptr)
+    , m_tickCounter(0)
+    , m_initialPoll(true)
+{
+#ifdef LIBVIRT_FOUND
+    // Set up authentication data
+    ConnectionAuthData authData;
+    authData.password = password;
+    authData.sshKeyPath = sshKeyPath;
+
+    // For SSH key authentication, we can set the environment variable
+    // or rely on SSH config. The user should configure SSH config properly.
+    if (!sshKeyPath.isEmpty()) {
+        qputenv("LIBVIRT_SSH_KEY_PATH", sshKeyPath.toUtf8());
+    }
+
+    // Attempt to open the connection with auth
+    authHelper.cbdata = &authData;
+    m_conn = virConnectOpenAuth(uri.toUtf8().constData(), &authHelper, 0);
+
+    if (m_conn) {
+        m_state = Active;
+        emit stateChanged(m_state);
+        qDebug() << "Connected to" << m_uri << "with authentication";
+    } else {
+        m_state = Disconnected;
+        emit stateChanged(m_state);
+        qWarning() << "Failed to connect to" << m_uri << "with authentication";
+    }
+
+    // Clear environment variable
+    if (!sshKeyPath.isEmpty()) {
+        qunsetenv("LIBVIRT_SSH_KEY_PATH");
+    }
+#else
+    // No libvirt support
+    m_state = Disconnected;
+    emit stateChanged(m_state);
+#endif
+}
+
 Connection::~Connection()
 {
     close();
 }
 
-Connection *Connection::open(const QString &uri)
+Connection *Connection::open(const QString &uri, const QString &sshKeyPath, const QString &password)
 {
-    auto *conn = new Connection(uri);
+    Connection *conn = nullptr;
+
+    // If no credentials provided, use simple connection (for local or SSH agent auth)
+    if (sshKeyPath.isEmpty() && password.isEmpty()) {
+        conn = new Connection(uri);
+    } else {
+        // Use authenticated connection
+        conn = new Connection(uri, sshKeyPath, password);
+    }
+
     if (!conn->isOpen()) {
         delete conn;
         return nullptr;

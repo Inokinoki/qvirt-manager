@@ -60,10 +60,13 @@ public:
 
     /**
      * @brief Open a new libvirt connection
-     * @param uri Connection URI (e.g., "qemu:///system")
+     * @param uri Connection URI (e.g., "qemu:///system" or "qemu+ssh://user@host/system")
+     * @param sshKeyPath Optional path to SSH private key
+     * @param password Optional password for authentication
      * @return Connection object, or nullptr on failure
      */
-    static Connection *open(const QString &uri);
+    static Connection *open(const QString &uri, const QString &sshKeyPath = QString(),
+                           const QString &password = QString());
 
     ~Connection() override;
 
@@ -108,6 +111,7 @@ public slots:
 
 private:
     Connection(const QString &uri);
+    Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
     void initAllResources();
     void pollDomains();
     void pollNetworks();

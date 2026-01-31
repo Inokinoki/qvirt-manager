@@ -21,13 +21,14 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
+#include <QGroupBox>
 
 namespace QVirt {
 
 /**
  * @brief Dialog for adding a new libvirt connection
  *
- * Placeholder for Phase 2 implementation
+ * Supports local and remote connections with SSH/TLS/TCP transports
  */
 class ConnectionDialog : public QDialog
 {
@@ -39,21 +40,48 @@ public:
 
     QString uri() const { return m_uri; }
     bool autoconnect() const { return m_autoconnect; }
+    QString sshKeyPath() const { return m_sshKeyPath; }
+    QString sshUsername() const { return m_sshUsername; }
+    QString sshPassword() const { return m_sshPassword; }
+    bool savePassword() const { return m_savePassword; }
 
 private slots:
     void validateAndAccept();
+    void updateURI();
+    void testConnection();
+    void onRemoteToggled(bool enabled);
+    void onTransportChanged(int index);
 
 private:
     void setupUI();
+    QString buildURI() const;
+    bool testConnection(const QString &testUri);
 
+    // Basic connection UI
     QLineEdit *m_uriEdit;
     QComboBox *m_typeCombo;
     QCheckBox *m_autoconnectCheck;
     QPushButton *m_btnOK;
     QPushButton *m_btnCancel;
 
+    // Remote connection UI
+    QGroupBox *m_remoteGroup;
+    QCheckBox *m_remoteCheck;
+    QComboBox *m_transportCombo;
+    QLineEdit *m_hostnameEdit;
+    QLineEdit *m_usernameEdit;
+    QLineEdit *m_portEdit;
+    QLineEdit *m_sshKeyPathEdit;
+    QPushButton *m_browseKeyPathBtn;
+    QCheckBox *m_savePasswordCheck;
+    QPushButton *m_testConnectionBtn;
+
     QString m_uri;
     bool m_autoconnect;
+    QString m_sshKeyPath;
+    QString m_sshUsername;
+    QString m_sshPassword;
+    bool m_savePassword;
 };
 
 } // namespace QVirt

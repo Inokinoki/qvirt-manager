@@ -32,7 +32,7 @@ target_link_libraries(qvirt-core
 
 if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-core
-        PUBLIC
+        PRIVATE
             ${LIBVIRT_LIBRARIES}
     )
 endif()
@@ -79,7 +79,7 @@ target_link_libraries(qvirt-libvirt
 
 if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-libvirt
-        PUBLIC
+        PRIVATE
             ${LIBVIRT_LIBRARIES}
     )
     target_compile_definitions(qvirt-libvirt
@@ -188,11 +188,9 @@ if(LIBVIRT_FOUND)
     )
 endif()
 
+# Note: qvirt-ui transitively links qvirt-libvirt and qvirt-core, which bring in qvirt-devices
 target_link_libraries(qvirt-manager
     PRIVATE
-        qvirt-core
-        qvirt-libvirt
-        qvirt-devices
         qvirt-ui
         # Explicitly link Qt libraries to ensure proper symbol resolution on all platforms
         Qt${QT_VERSION_MAJOR}::Core
@@ -202,12 +200,7 @@ target_link_libraries(qvirt-manager
         Qt${QT_VERSION_MAJOR}::Network
 )
 
-if(LIBVIRT_FOUND)
-    target_link_libraries(qvirt-manager
-        PRIVATE
-            ${LIBVIRT_LIBRARIES}
-    )
-endif()
+# Note: libvirt is already linked via qvirt-core and qvirt-libvirt static libraries
 
 # Install
 install(TARGETS qvirt-manager DESTINATION ${CMAKE_INSTALL_BINDIR})

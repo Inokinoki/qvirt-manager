@@ -564,16 +564,144 @@ void Connection::pollDomains()
 
 void Connection::pollNetworks()
 {
-    // Similar to pollDomains but for networks
-    // For now, just log
-    qDebug() << "Polling networks for" << m_uri;
+    // Check for new or removed networks
+    int numNetworks = virConnectNumOfNetworks(m_conn);
+    int numInactiveNetworks = virConnectNumOfDefinedNetworks(m_conn);
+
+    QSet<QString> currentNetworkNames;
+
+    // Check active networks
+    if (numNetworks > 0) {
+        char **networkNames = new char *[numNetworks];
+        int actualNetworks = virConnectListNetworks(m_conn, networkNames, numNetworks);
+        if (actualNetworks >= 0) {
+            for (int i = 0; i < actualNetworks; i++) {
+                QString networkName = QString::fromUtf8(networkNames[i]);
+                currentNetworkNames.insert(networkName);
+
+                if (!m_networks.contains(networkName)) {
+                    virNetworkPtr networkPtr = virNetworkLookupByName(m_conn, networkNames[i]);
+                    if (networkPtr) {
+                        auto *network = new Network(this, networkPtr);
+                        m_networks[networkName] = network;
+                        emit networkAdded(network);
+                    }
+                }
+                free(networkNames[i]);
+            }
+        }
+        delete[] networkNames;
+    }
+
+    // Check inactive networks
+    if (numInactiveNetworks > 0) {
+        char **networkNames = new char *[numInactiveNetworks];
+        int actualNetworks = virConnectListDefinedNetworks(m_conn, networkNames, numInactiveNetworks);
+        if (actualNetworks >= 0) {
+            for (int i = 0; i < actualNetworks; i++) {
+                QString networkName = QString::fromUtf8(networkNames[i]);
+                currentNetworkNames.insert(networkName);
+
+                if (!m_networks.contains(networkName)) {
+                    virNetworkPtr networkPtr = virNetworkLookupByName(m_conn, networkNames[i]);
+                    if (networkPtr) {
+                        auto *network = new Network(this, networkPtr);
+                        m_networks[networkName] = network;
+                        emit networkAdded(network);
+                    }
+                }
+                free(networkNames[i]);
+            }
+        }
+        delete[] networkNames;
+    }
+
+    // Check for removed networks
+    QStringList removedNetworks;
+    for (auto it = m_networks.begin(); it != m_networks.end(); ++it) {
+        if (!currentNetworkNames.contains(it.key())) {
+            removedNetworks.append(it.key());
+        }
+    }
+
+    for (const QString &name : removedNetworks) {
+        Network *network = m_networks.take(name);
+        if (network) {
+            emit networkRemoved(network);
+            delete network;
+        }
+    }
 }
 
 void Connection::pollStoragePools()
 {
-    // Similar to pollDomains but for storage pools
-    // For now, just log
-    qDebug() << "Polling storage pools for" << m_uri;
+    // Check for new or removed storage pools
+    int numPools = virConnectNumOfStoragePools(m_conn);
+    int numInactivePools = virConnectNumOfDefinedStoragePools(m_conn);
+
+    QSet<QString> currentPoolNames;
+
+    // Check active pools
+    if (numPools > 0) {
+        char **poolNames = new char *[numPools];
+        int actualPools = virConnectListStoragePools(m_conn, poolNames, numPools);
+        if (actualPools >= 0) {
+            for (int i = 0; i < actualPools; i++) {
+                QString poolName = QString::fromUtf8(poolNames[i]);
+                currentPoolNames.insert(poolName);
+
+                if (!m_storagePools.contains(poolName)) {
+                    virStoragePoolPtr poolPtr = virStoragePoolLookupByName(m_conn, poolNames[i]);
+                    if (poolPtr) {
+                        auto *pool = new StoragePool(this, poolPtr);
+                        m_storagePools[poolName] = pool;
+                        emit storagePoolAdded(pool);
+                    }
+                }
+                free(poolNames[i]);
+            }
+        }
+        delete[] poolNames;
+    }
+
+    // Check inactive pools
+    if (numInactivePools > 0) {
+        char **poolNames = new char *[numInactivePools];
+        int actualPools = virConnectListDefinedStoragePools(m_conn, poolNames, numInactivePools);
+        if (actualPools >= 0) {
+            for (int i = 0; i < actualPools; i++) {
+                QString poolName = QString::fromUtf8(poolNames[i]);
+                currentPoolNames.insert(poolName);
+
+                if (!m_storagePools.contains(poolName)) {
+                    virStoragePoolPtr poolPtr = virStoragePoolLookupByName(m_conn, poolNames[i]);
+                    if (poolPtr) {
+                        auto *pool = new StoragePool(this, poolPtr);
+                        m_storagePools[poolName] = pool;
+                        emit storagePoolAdded(pool);
+                    }
+                }
+                free(poolNames[i]);
+            }
+        }
+        delete[] poolNames;
+    }
+
+    // Check for removed pools
+    QStringList removedPools;
+    for (auto it = m_storagePools.begin(); it != m_storagePools.end(); ++it) {
+        if (!currentPoolNames.contains(it.key())) {
+            removedPools.append(it.key());
+        }
+    }
+
+    for (const QString &name : removedPools) {
+        StoragePool *pool = m_storagePools.take(name);
+        if (pool) {
+            emit storagePoolRemoved(pool);
+            delete pool;
+        }
+    }
 }
 
 } // namespace QVirt

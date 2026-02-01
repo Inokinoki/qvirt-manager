@@ -19,6 +19,8 @@
 #include <QInputDialog>
 #include <QFormLayout>
 #include <QGridLayout>
+#include <QGuiApplication>
+#include <QStandardItemModel>
 
 namespace QVirt {
 
@@ -207,8 +209,50 @@ void StoragePoolDialog::updatePoolList()
     // Get list of storage pools from connection
     QList<StoragePool*> pools = m_connection->storagePools();
 
-    // TODO: Update pool list model
-    // For now, just update the info
+    // Create table model
+    auto *model = new QStandardItemModel(this);
+    model->setHorizontalHeaderLabels({"Name", "State", "Type", "Capacity", "Allocated", "Available"});
+
+    for (StoragePool *pool : pools) {
+        if (!pool) {
+            continue;
+        }
+
+        QList<QStandardItem*> row;
+
+        // Name
+        row.append(new QStandardItem(pool->name()));
+
+        // State
+        QString stateStr = EnumMapper::poolStateToString(pool->state());
+        QStandardItem *stateItem = new QStandardItem(stateStr);
+        if (pool->isActive()) {
+            stateItem->setForeground(QBrush(Qt::darkGreen));
+        } else {
+            stateItem->setForeground(QBrush(Qt::gray));
+        }
+        row.append(stateItem);
+
+        // Type
+        row.append(new QStandardItem(EnumMapper::poolTypeToString(pool->type())));
+
+        // Capacity (in GB)
+        double capacityGB = pool->capacity() / (1024.0 * 1024 * 1024);
+        row.append(new QStandardItem(QString("%1 GB").arg(capacityGB, 0, 'f', 2)));
+
+        // Allocated (in GB)
+        double allocatedGB = pool->allocation() / (1024.0 * 1024 * 1024);
+        row.append(new QStandardItem(QString("%1 GB").arg(allocatedGB, 0, 'f', 2)));
+
+        // Available (in GB)
+        double availableGB = pool->available() / (1024.0 * 1024 * 1024);
+        row.append(new QStandardItem(QString("%1 GB").arg(availableGB, 0, 'f', 2)));
+
+        model->appendRow(row);
+    }
+
+    m_poolList->setModel(model);
+    m_poolList->resizeColumnsToContents();
     m_poolInfoLabel->setText(QString("Found %1 storage pool(s)").arg(pools.size()));
 }
 
@@ -221,7 +265,39 @@ void StoragePoolDialog::updateVolumeList()
     // Get list of volumes from pool
     QList<StorageVolume*> volumes = m_currentPool->volumes();
 
-    // TODO: Update volume list model
+    // Create table model
+    auto *model = new QStandardItemModel(this);
+    model->setHorizontalHeaderLabels({"Name", "Type", "Capacity", "Allocation", "Path"});
+
+    for (StorageVolume *volume : volumes) {
+        if (!volume) {
+            continue;
+        }
+
+        QList<QStandardItem*> row;
+
+        // Name
+        row.append(new QStandardItem(volume->name()));
+
+        // Type
+        row.append(new QStandardItem(EnumMapper::volumeTypeToString(volume->type())));
+
+        // Capacity (in GB)
+        double capacityGB = volume->capacity() / (1024.0 * 1024 * 1024);
+        row.append(new QStandardItem(QString("%1 GB").arg(capacityGB, 0, 'f', 2)));
+
+        // Allocation (in GB)
+        double allocationGB = volume->allocation() / (1024.0 * 1024 * 1024);
+        row.append(new QStandardItem(QString("%1 GB").arg(allocationGB, 0, 'f', 2)));
+
+        // Path
+        row.append(new QStandardItem(volume->path()));
+
+        model->appendRow(row);
+    }
+
+    m_volumeList->setModel(model);
+    m_volumeList->resizeColumnsToContents();
     m_volumeInfoLabel->setText(QString("Found %1 volume(s)").arg(volumes.size()));
 }
 

@@ -20,6 +20,7 @@
 namespace QVirt {
 
 class Connection;
+class ManagerWindow;
 
 /**
  * @brief Main application engine (singleton)
@@ -85,6 +86,7 @@ private:
 
     QTimer *m_tickTimer;
     QMap<QString, Connection *> m_connections;
+    ManagerWindow *m_managerWindow;
 };
 
 } // namespace QVirt

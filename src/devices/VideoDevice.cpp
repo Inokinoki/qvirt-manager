@@ -10,6 +10,7 @@
  */
 
 #include "VideoDevice.h"
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -61,10 +62,51 @@ QString VideoDevice::toXML() const
 
 bool VideoDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
-    Q_UNUSED(xml);
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "video") {
+        return false;
+    }
+
+    // Parse model element
+    QDomNodeList modelNodes = root.elementsByTagName("model");
+    if (modelNodes.size() > 0) {
+        QDomElement modelElem = modelNodes.item(0).toElement();
+
+        // Parse model type
+        QString modelStr = modelElem.attribute("type");
+        if (!modelStr.isEmpty()) {
+            m_model = stringToModel(modelStr);
+        }
+
+        // Parse vram (in KB)
+        QString vramStr = modelElem.attribute("vram");
+        if (!vramStr.isEmpty()) {
+            m_vram = vramStr.toInt();
+        }
+
+        // Parse heads
+        QString headsStr = modelElem.attribute("heads");
+        if (!headsStr.isEmpty()) {
+            m_heads = headsStr.toInt();
+        }
+
+        // Parse acceleration
+        QDomNodeList accelNodes = modelElem.elementsByTagName("acceleration");
+        if (accelNodes.size() > 0) {
+            QDomElement accelElem = accelNodes.item(0).toElement();
+            QString accel3dStr = accelElem.attribute("accel3d");
+            if (!accel3dStr.isEmpty()) {
+                m_accel3D = (accel3dStr.toLower() == "yes");
+            }
+        }
+    }
+
+    return true;
 }
 
 QString VideoDevice::modelToString(VideoModel model)

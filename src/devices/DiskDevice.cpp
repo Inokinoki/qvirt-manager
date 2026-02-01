@@ -10,6 +10,7 @@
  */
 
 #include "DiskDevice.h"
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -132,11 +133,116 @@ QString DiskDevice::toXML() const
 
 bool DiskDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // This is a simplified version - in production you'd use QDomDocument
-    Q_UNUSED(xml);
-    // TODO: Implement proper XML parsing
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "disk") {
+        return false;
+    }
+
+    // Parse type attribute
+    QString typeStr = root.attribute("type");
+    if (!typeStr.isEmpty()) {
+        if (typeStr == "file") m_diskType = DiskType::File;
+        else if (typeStr == "block") m_diskType = DiskType::Block;
+        else if (typeStr == "dir") m_diskType = DiskType::Dir;
+        else if (typeStr == "network") m_diskType = DiskType::Network;
+        else if (typeStr == "volume") m_diskType = DiskType::Volume;
+    }
+
+    // Parse device attribute
+    QString deviceStr = root.attribute("device");
+    if (!deviceStr.isEmpty()) {
+        m_device = stringToDeviceType(deviceStr);
+    }
+
+    // Parse target element
+    QDomNodeList targetNodes = root.elementsByTagName("target");
+    if (!targetNodes.isEmpty()) {
+        QDomElement targetElem = targetNodes.at(0).toElement();
+        m_target = targetElem.attribute("dev");
+
+        QString busStr = targetElem.attribute("bus");
+        if (!busStr.isEmpty()) {
+            m_bus = stringToBusType(busStr);
+        }
+    }
+
+    // Parse source element (file, dev, dir, or volume)
+    QDomNodeList sourceNodes = root.elementsByTagName("source");
+    if (!sourceNodes.isEmpty()) {
+        QDomElement sourceElem = sourceNodes.at(0).toElement();
+
+        // Try different source attributes based on disk type
+        QString fileStr = sourceElem.attribute("file");
+        if (!fileStr.isEmpty()) {
+            m_source = fileStr;
+        } else {
+            QString devStr = sourceElem.attribute("dev");
+            if (!devStr.isEmpty()) {
+                m_source = devStr;
+            } else {
+                QString dirStr = sourceElem.attribute("dir");
+                if (!dirStr.isEmpty()) {
+                    m_source = dirStr;
+                } else {
+                    QString volumeStr = sourceElem.attribute("volume");
+                    if (!volumeStr.isEmpty()) {
+                        m_source = volumeStr;
+                    } else {
+                        QString nameStr = sourceElem.attribute("name");
+                        if (!nameStr.isEmpty()) {
+                            m_source = nameStr;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Parse driver element
+    QDomNodeList driverNodes = root.elementsByTagName("driver");
+    if (!driverNodes.isEmpty()) {
+        QDomElement driverElem = driverNodes.at(0).toElement();
+        m_driverName = driverElem.attribute("name");
+        m_driverType = driverElem.attribute("type");
+
+        // Parse driver cache mode
+        QString cacheStr = driverElem.attribute("cache");
+        if (!cacheStr.isEmpty()) {
+            m_cacheMode = stringToCacheMode(cacheStr);
+        }
+    }
+
+    // Parse readonly element
+    QDomNodeList readonlyNodes = root.elementsByTagName("readonly");
+    m_readonly = !readonlyNodes.isEmpty();
+
+    // Parse shareable element
+    QDomNodeList shareableNodes = root.elementsByTagName("shareable");
+    m_shareable = !shareableNodes.isEmpty();
+
+    // Parse address element
+    QDomNodeList addressNodes = root.elementsByTagName("address");
+    if (!addressNodes.isEmpty()) {
+        QDomElement addressElem = addressNodes.at(0).toElement();
+        QString addressStr = addressElem.attribute("type");
+        if (!addressStr.isEmpty()) {
+            m_address.fromString(addressStr);
+        }
+    }
+
+    // Parse alias element
+    QDomNodeList aliasNodes = root.elementsByTagName("alias");
+    if (!aliasNodes.isEmpty()) {
+        QDomElement aliasElem = aliasNodes.at(0).toElement();
+        m_alias = aliasElem.attribute("name");
+    }
+
+    return true;
 }
 
 void DiskDevice::setTarget(const QString &target)

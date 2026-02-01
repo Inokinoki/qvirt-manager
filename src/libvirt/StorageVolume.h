@@ -17,6 +17,7 @@
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
+#include <libvirt/libvirt-stream.h>
 
 // Windows.h defines 'state' as a macro which breaks our code
 #ifdef _WIN32
@@ -26,6 +27,7 @@
 typedef struct _virStorageVol virStorageVol;
 #else
 typedef void *virStorageVolPtr;
+typedef void *virStreamPtr;
 #endif // LIBVIRT_FOUND
 
 namespace QVirt {

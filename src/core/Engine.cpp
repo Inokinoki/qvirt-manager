@@ -11,6 +11,7 @@
 
 #include "Engine.h"
 #include "../libvirt/Connection.h"
+#include "../ui/manager/ManagerWindow.h"
 #include <QApplication>
 #include <QCoreApplication>
 
@@ -21,6 +22,7 @@ Engine *Engine::s_instance = nullptr;
 Engine::Engine()
     : BaseObject(nullptr)
     , m_tickTimer(new QTimer(this))
+    , m_managerWindow(nullptr)
 {
     // Setup tick timer for polling
     connect(m_tickTimer, &QTimer::timeout, this, &Engine::onTick);
@@ -51,9 +53,15 @@ void Engine::init()
 
 void Engine::showManager()
 {
-    // TODO: Create and show the manager window
-    // For now, we'll just emit a signal
-    emit appClosing();
+    // Create manager window if it doesn't exist
+    if (!m_managerWindow) {
+        m_managerWindow = new ManagerWindow();
+    }
+
+    // Show the manager window
+    m_managerWindow->show();
+    m_managerWindow->raise();
+    m_managerWindow->activateWindow();
 }
 
 void Engine::registerConnection(Connection *conn)

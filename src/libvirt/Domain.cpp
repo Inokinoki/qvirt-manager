@@ -15,6 +15,8 @@
 #include "EnumMapper.h"
 #include "../core/Error.h"
 #include <QDebug>
+#include <QDomDocument>
+#include <cstring>
 
 namespace QVirt {
 
@@ -90,7 +92,25 @@ void Domain::updateInfo()
     if (xml) {
         QString xmlStr = QString::fromUtf8(xml);
         free(xml);
-        // TODO: Parse XML for description, title, etc.
+
+        // Parse description and title from XML
+        QDomDocument doc;
+        if (doc.setContent(xmlStr)) {
+            QDomElement root = doc.documentElement();
+            if (root.tagName() == "domain") {
+                // Parse description
+                QDomNodeList descNodes = root.elementsByTagName("description");
+                if (!descNodes.isEmpty()) {
+                    m_description = descNodes.at(0).toElement().text();
+                }
+
+                // Parse title
+                QDomNodeList titleNodes = root.elementsByTagName("title");
+                if (!titleNodes.isEmpty()) {
+                    m_title = titleNodes.at(0).toElement().text();
+                }
+            }
+        }
     }
 
     emit statsUpdated();
@@ -318,16 +338,140 @@ quint64 Domain::currentMemory() const
 
 float Domain::diskUsage() const
 {
-    // TODO: Implement disk usage calculation
-    // Requires querying block stats
-    return 0.0f;
+    if (!m_domain) {
+        return 0.0f;
+    }
+
+    // Get domain XML to find disk devices
+    char *xml = virDomainGetXMLDesc(m_domain, 0);
+    if (!xml) {
+        return 0.0f;
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    QDomDocument doc;
+    if (!doc.setContent(xmlStr)) {
+        return 0.0f;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "domain") {
+        return 0.0f;
+    }
+
+    // Find all disk devices
+    long long totalBytes = 0;
+    QDomNodeList diskNodes = root.elementsByTagName("disk");
+
+    for (int i = 0; i < diskNodes.count(); i++) {
+        QDomElement diskElem = diskNodes.at(i).toElement();
+        QString diskType = diskElem.attribute("type");
+
+        // Only get stats for file and block devices
+        if (diskType != "file" && diskType != "block") {
+            continue;
+        }
+
+        // Get the target device name (e.g., "vda", "sda")
+        QDomNodeList targetNodes = diskElem.elementsByTagName("target");
+        if (targetNodes.isEmpty()) {
+            continue;
+        }
+
+        QDomElement targetElem = targetNodes.at(0).toElement();
+        QString targetDev = targetElem.attribute("dev");
+        if (targetDev.isEmpty()) {
+            continue;
+        }
+
+        // Query block stats for this disk
+        virDomainBlockStatsStruct stats;
+        memset(&stats, 0, sizeof(stats));
+
+        if (virDomainBlockStats(m_domain, targetDev.toUtf8().constData(),
+                                &stats, sizeof(stats)) < 0) {
+            continue;
+        }
+
+        // Accumulate read and write bytes
+        if (stats.rd_bytes > 0) {
+            totalBytes += stats.rd_bytes;
+        }
+        if (stats.wr_bytes > 0) {
+            totalBytes += stats.wr_bytes;
+        }
+    }
+
+    // Return usage in MB
+    return static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
 }
 
 float Domain::networkUsage() const
 {
-    // TODO: Implement network usage calculation
-    // Requires querying interface stats
-    return 0.0f;
+    if (!m_domain) {
+        return 0.0f;
+    }
+
+    // Get domain XML to find network interfaces
+    char *xml = virDomainGetXMLDesc(m_domain, 0);
+    if (!xml) {
+        return 0.0f;
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    QDomDocument doc;
+    if (!doc.setContent(xmlStr)) {
+        return 0.0f;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "domain") {
+        return 0.0f;
+    }
+
+    // Find all network interface devices
+    long long totalBytes = 0;
+    QDomNodeList interfaceNodes = root.elementsByTagName("interface");
+
+    for (int i = 0; i < interfaceNodes.count(); i++) {
+        QDomElement interfaceElem = interfaceNodes.at(i).toElement();
+
+        // Get the target device name (e.g., "vnet0")
+        QDomNodeList targetNodes = interfaceElem.elementsByTagName("target");
+        if (targetNodes.isEmpty()) {
+            continue;
+        }
+
+        QDomElement targetElem = targetNodes.at(0).toElement();
+        QString targetDev = targetElem.attribute("dev");
+        if (targetDev.isEmpty()) {
+            continue;
+        }
+
+        // Query interface stats for this network device
+        virDomainInterfaceStatsStruct stats;
+        memset(&stats, 0, sizeof(stats));
+
+        if (virDomainInterfaceStats(m_domain, targetDev.toUtf8().constData(),
+                                    &stats, sizeof(stats)) < 0) {
+            continue;
+        }
+
+        // Accumulate RX and TX bytes
+        if (stats.rx_bytes > 0) {
+            totalBytes += stats.rx_bytes;
+        }
+        if (stats.tx_bytes > 0) {
+            totalBytes += stats.tx_bytes;
+        }
+    }
+
+    // Return usage in MB
+    return static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
 }
 
 QList<DomainSnapshot*> Domain::snapshots() const

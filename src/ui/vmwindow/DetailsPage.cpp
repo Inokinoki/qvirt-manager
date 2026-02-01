@@ -15,6 +15,7 @@
 
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QIcon>
 
 namespace QVirt {
 
@@ -181,7 +182,41 @@ QTreeWidgetItem* DetailsPage::addDeviceCategory(const QString &name, const QStri
     item->setText(0, name);
     item->setText(1, QString());
     item->setFirstColumnSpanned(false);
-    // TODO: Set icon when icons are available
+
+    // Set icon if available
+    if (!icon.isEmpty()) {
+        QString iconPath;
+
+        // Map icon names to resource paths
+        if (icon == "cpu") {
+            iconPath = ":/icons/devices/cpu.svg";
+        } else if (icon == "memory") {
+            iconPath = ":/icons/devices/memory.svg";
+        } else if (icon == "drive-harddisk" || icon == "disk") {
+            iconPath = ":/icons/devices/disk.svg";
+        } else if (icon == "network-wired" || icon == "network") {
+            iconPath = ":/icons/devices/network.svg";
+        } else if (icon == "video-display" || icon == "display") {
+            iconPath = ":/icons/devices/display.svg";
+        } else if (icon == "audio-card" || icon == "sound") {
+            // No sound icon defined yet, use a fallback
+            iconPath = QString();
+        } else if (icon == "input-keyboard" || icon == "input") {
+            // No input icon defined yet, use a fallback
+            iconPath = QString();
+        } else if (icon == "usb") {
+            // No USB icon defined yet, use a fallback
+            iconPath = QString();
+        } else if (icon == "boot") {
+            // No boot icon defined yet, use a fallback
+            iconPath = QString();
+        }
+
+        if (!iconPath.isEmpty()) {
+            item->setIcon(0, QIcon(iconPath));
+        }
+    }
+
     return item;
 }
 

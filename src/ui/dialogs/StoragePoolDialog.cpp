@@ -21,6 +21,7 @@
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QStandardItemModel>
+#include <QItemSelectionModel>
 
 namespace QVirt {
 
@@ -352,26 +353,59 @@ void StoragePoolDialog::updateVolumeInfo()
 void StoragePoolDialog::onPoolSelected()
 {
     // Get selected pool from table
-    // TODO: Implement proper model/selection
-    // For now, use first pool from connection
+    QItemSelectionModel *selectionModel = m_poolList->selectionModel();
+    if (!selectionModel) {
+        return;
+    }
+
+    QModelIndexList selectedIndexes = selectionModel->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        return;
+    }
+
+    // Get the pool name from the first column of the selected row
+    QModelIndex index = selectedIndexes.first();
+    QAbstractItemModel *model = m_poolList->model();
+    QString poolName = model->data(model->index(index.row(), 0)).toString();
+
+    // Find the pool by name
     QList<StoragePool*> pools = m_connection->storagePools();
-    if (!pools.isEmpty()) {
-        m_currentPool = pools.first();
-        updatePoolInfo();
-        m_btnVolumeCreate->setEnabled(m_currentPool->state() == StoragePool::StateRunning);
-        updateVolumeList();
+    for (StoragePool *pool : pools) {
+        if (pool && pool->name() == poolName) {
+            m_currentPool = pool;
+            updatePoolInfo();
+            m_btnVolumeCreate->setEnabled(m_currentPool->state() == StoragePool::StateRunning);
+            updateVolumeList();
+            break;
+        }
     }
 }
 
 void StoragePoolDialog::onVolumeSelected()
 {
     // Get selected volume from table
-    // TODO: Implement proper model/selection
-    if (m_currentPool) {
-        QList<StorageVolume*> volumes = m_currentPool->volumes();
-        if (!volumes.isEmpty()) {
-            m_currentVolume = volumes.first();
+    QItemSelectionModel *selectionModel = m_volumeList->selectionModel();
+    if (!selectionModel || !m_currentPool) {
+        return;
+    }
+
+    QModelIndexList selectedIndexes = selectionModel->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        return;
+    }
+
+    // Get the volume name from the first column of the selected row
+    QModelIndex index = selectedIndexes.first();
+    QAbstractItemModel *model = m_volumeList->model();
+    QString volumeName = model->data(model->index(index.row(), 0)).toString();
+
+    // Find the volume by name
+    QList<StorageVolume*> volumes = m_currentPool->volumes();
+    for (StorageVolume *volume : volumes) {
+        if (volume && volume->name() == volumeName) {
+            m_currentVolume = volume;
             updateVolumeInfo();
+            break;
         }
     }
 }

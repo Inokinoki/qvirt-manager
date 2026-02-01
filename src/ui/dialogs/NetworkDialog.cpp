@@ -18,6 +18,9 @@
 #include <QInputDialog>
 #include <QGridLayout>
 #include <QScrollArea>
+#include <QGuiApplication>
+#include <QStandardItemModel>
+#include <QItemSelectionModel>
 
 namespace QVirt {
 
@@ -142,8 +145,55 @@ void NetworkDialog::updateNetworkList()
     // Get list of networks from connection
     QList<Network*> networks = m_connection->networks();
 
-    // TODO: Update network list model
-    // For now, just update the info
+    // Create table model
+    auto *model = new QStandardItemModel(this);
+    model->setHorizontalHeaderLabels({"Name", "State", "Forward Mode", "Active", "IP Address", "DHCP"});
+
+    for (Network *network : networks) {
+        if (!network) {
+            continue;
+        }
+
+        QList<QStandardItem*> row;
+
+        // Name
+        row.append(new QStandardItem(network->name()));
+
+        // State
+        QString stateStr = EnumMapper::networkStateToString(network->state());
+        QStandardItem *stateItem = new QStandardItem(stateStr);
+        if (network->isActive()) {
+            stateItem->setForeground(QBrush(Qt::darkGreen));
+        } else {
+            stateItem->setForeground(QBrush(Qt::gray));
+        }
+        row.append(stateItem);
+
+        // Forward Mode
+        row.append(new QStandardItem(EnumMapper::forwardModeToString(network->forwardMode())));
+
+        // Active
+        QStandardItem *activeItem = new QStandardItem(network->isActive() ? "Yes" : "No");
+        if (network->isActive()) {
+            activeItem->setForeground(QBrush(Qt::darkGreen));
+        } else {
+            activeItem->setForeground(QBrush(Qt::gray));
+        }
+        row.append(activeItem);
+
+        // IP Address
+        row.append(new QStandardItem(network->ipAddress()));
+
+        // DHCP
+        QString dhcpStr = network->dhcpEnabled() ?
+            QString("%1 - %2").arg(network->dhcpStart()).arg(network->dhcpEnd()) : "No";
+        row.append(new QStandardItem(dhcpStr));
+
+        model->appendRow(row);
+    }
+
+    m_networkList->setModel(model);
+    m_networkList->resizeColumnsToContents();
     m_networkInfoLabel->setText(QString("Found %1 network(s)").arg(networks.size()));
 }
 
@@ -184,12 +234,29 @@ void NetworkDialog::updateNetworkInfo()
 void NetworkDialog::onNetworkSelected()
 {
     // Get selected network from table
-    // TODO: Implement proper model/selection
-    // For now, use first network from connection
+    QItemSelectionModel *selectionModel = m_networkList->selectionModel();
+    if (!selectionModel) {
+        return;
+    }
+
+    QModelIndexList selectedIndexes = selectionModel->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        return;
+    }
+
+    // Get the network name from the first column of the selected row
+    QModelIndex index = selectedIndexes.first();
+    QAbstractItemModel *model = m_networkList->model();
+    QString networkName = model->data(model->index(index.row(), 0)).toString();
+
+    // Find the network by name
     QList<Network*> networks = m_connection->networks();
-    if (!networks.isEmpty()) {
-        m_currentNetwork = networks.first();
-        updateNetworkInfo();
+    for (Network *network : networks) {
+        if (network && network->name() == networkName) {
+            m_currentNetwork = network;
+            updateNetworkInfo();
+            break;
+        }
     }
 }
 

@@ -10,12 +10,14 @@
  */
 
 #include "ConnectionDialog.h"
+#include "../../core/Config.h"
 #include <QDebug>
 #include <QDir>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QCoreApplication>
+#include <QUrl>
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
@@ -27,11 +29,30 @@ ConnectionDialog::ConnectionDialog(QWidget *parent)
     : QDialog(parent)
     , m_autoconnect(false)
     , m_savePassword(false)
+    , m_isEditMode(false)
 {
     setupUI();
     setWindowTitle(tr("Add Connection"));
     setModal(true);
     updateURI();
+}
+
+ConnectionDialog::ConnectionDialog(const ConnectionInfo &info, QWidget *parent)
+    : QDialog(parent)
+    , m_uri(info.uri)
+    , m_originalURI(info.uri)
+    , m_autoconnect(info.autoconnect)
+    , m_sshKeyPath(info.sshKeyPath)
+    , m_sshUsername(info.sshUsername)
+    , m_savePassword(false)
+    , m_isEditMode(true)
+{
+    setupUI();
+    loadConnectionInfo(info);
+    setWindowTitle(tr("Edit Connection"));
+    setModal(true);
+    // Don't call updateURI() in edit mode - we already have the correct URI
+    // and calling it might rebuild it incorrectly from disabled fields
 }
 
 ConnectionDialog::~ConnectionDialog() = default;
@@ -126,7 +147,7 @@ void ConnectionDialog::setupUI()
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
 
-    m_btnOK = new QPushButton(tr("Connect"));
+    m_btnOK = new QPushButton(m_isEditMode ? tr("Save") : tr("Connect"));
     m_btnCancel = new QPushButton(tr("Cancel"));
 
     buttonLayout->addWidget(m_btnOK);
@@ -354,6 +375,81 @@ void ConnectionDialog::validateAndAccept()
     if (!m_uri.isEmpty()) {
         accept();
     }
+}
+
+void ConnectionDialog::loadConnectionInfo(const ConnectionInfo &info)
+{
+    // Parse the URI to extract components
+    QString uri = info.uri;
+
+    // Check if it's a remote connection
+    bool isRemote = uri.contains("+") && uri.contains("://") && !uri.contains(":///");
+
+    m_remoteCheck->setChecked(isRemote);
+    m_remoteGroup->setEnabled(isRemote);
+    m_autoconnectCheck->setChecked(info.autoconnect);
+    m_sshKeyPathEdit->setText(info.sshKeyPath);
+
+    if (isRemote) {
+        // Parse remote URI: hypervisor+transport://[username@]hostname[:port]/system
+        QUrl url(uri);
+        QString scheme = url.scheme();  // e.g., "qemu+ssh"
+
+        // Extract hypervisor and transport
+        QStringList parts = scheme.split("+");
+        if (parts.size() == 2) {
+            QString hypervisor = parts[0];
+            QString transport = parts[1];
+
+            // Set hypervisor type
+            int typeIndex = m_typeCombo->findData(hypervisor);
+            if (typeIndex >= 0) {
+                m_typeCombo->setCurrentIndex(typeIndex);
+            }
+
+            // Set transport
+            int transportIndex = m_transportCombo->findData(transport);
+            if (transportIndex >= 0) {
+                m_transportCombo->setCurrentIndex(transportIndex);
+            }
+        }
+
+        // Set hostname
+        m_hostnameEdit->setText(url.host());
+
+        // Set username
+        m_usernameEdit->setText(url.userName());
+
+        // Set port
+        if (url.port() > 0) {
+            m_portEdit->setText(QString::number(url.port()));
+        }
+
+        // In edit mode, disable changing hypervisor type and remote setting
+        // as this would change the URI
+        m_typeCombo->setEnabled(false);
+        m_remoteCheck->setEnabled(false);
+        m_hostnameEdit->setReadOnly(true);
+        m_portEdit->setReadOnly(true);
+        m_transportCombo->setEnabled(false);
+    } else {
+        // Local connection
+        int typeIndex = m_typeCombo->findData(uri);
+        if (typeIndex >= 0) {
+            m_typeCombo->setCurrentIndex(typeIndex);
+        } else if (uri.contains("qemu")) {
+            m_typeCombo->setCurrentIndex(0);
+        } else if (uri.contains("xen")) {
+            m_typeCombo->setCurrentIndex(2);
+        }
+
+        // In edit mode, disable changing hypervisor type
+        m_typeCombo->setEnabled(false);
+        m_remoteCheck->setEnabled(false);
+    }
+
+    // Username field can always be edited
+    // SSH key path can always be edited
 }
 
 } // namespace QVirt

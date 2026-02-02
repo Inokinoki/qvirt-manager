@@ -17,19 +17,9 @@
 #include <QSet>
 
 #include "../../libvirt/Connection.h"
+#include "../../core/Config.h"
 
 namespace QVirt {
-
-/**
- * @brief Information about a connection (for disconnected connections)
- */
-struct ConnectionInfo {
-    QString uri;
-    bool autoconnect;
-
-    ConnectionInfo(const QString &u = QString(), bool autoconnect = false)
-        : uri(u), autoconnect(autoconnect) {}
-};
 
 /**
  * @brief Qt model for displaying list of libvirt connections
@@ -75,6 +65,9 @@ public:
 
     // Check if connection exists (connected or disconnected)
     bool hasConnection(const QString &uri) const;
+
+    // Refresh the model (emit layoutChanged signal)
+    void refresh();
 
     // Update signals from connections
     void onConnectionStateChanged(Connection::State state);

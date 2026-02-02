@@ -25,6 +25,9 @@
 
 namespace QVirt {
 
+// Forward declaration
+struct ConnectionInfo;
+
 /**
  * @brief Dialog for adding a new libvirt connection
  *
@@ -36,14 +39,17 @@ class ConnectionDialog : public QDialog
 
 public:
     explicit ConnectionDialog(QWidget *parent = nullptr);
+    explicit ConnectionDialog(const ConnectionInfo &info, QWidget *parent = nullptr);
     ~ConnectionDialog() override;
 
     QString uri() const { return m_uri; }
+    QString originalURI() const { return m_originalURI; }
     bool autoconnect() const { return m_autoconnect; }
     QString sshKeyPath() const { return m_sshKeyPath; }
     QString sshUsername() const { return m_sshUsername; }
     QString sshPassword() const { return m_sshPassword; }
     bool savePassword() const { return m_savePassword; }
+    bool isEditMode() const { return m_isEditMode; }
 
 private slots:
     void validateAndAccept();
@@ -54,6 +60,7 @@ private slots:
 
 private:
     void setupUI();
+    void loadConnectionInfo(const ConnectionInfo &info);
     QString buildURI() const;
     bool testConnection(const QString &testUri);
 
@@ -77,11 +84,13 @@ private:
     QPushButton *m_testConnectionBtn;
 
     QString m_uri;
+    QString m_originalURI;  // For edit mode - stores original URI
     bool m_autoconnect;
     QString m_sshKeyPath;
     QString m_sshUsername;
     QString m_sshPassword;
     bool m_savePassword;
+    bool m_isEditMode;
 };
 
 } // namespace QVirt

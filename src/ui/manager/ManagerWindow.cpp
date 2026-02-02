@@ -843,11 +843,81 @@ void ManagerWindow::onDisconnectFromConnection()
 
 void ManagerWindow::onEditConnection()
 {
-    // For now, show a message that editing is not yet implemented
-    // In a full implementation, this would open the connection dialog with pre-filled values
-    QMessageBox::information(this, tr("Edit Connection"),
-        tr("Connection editing will be implemented in a future version.\n\n"
-           "To modify a connection, you can delete it and add a new one."));
+    QModelIndex index = m_connectionList->currentIndex();
+    if (!index.isValid()) {
+        return;
+    }
+
+    int row = index.row();
+    Connection *conn = m_connectionModel->connectionAt(row);
+    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+
+    QString uri;
+    if (conn) {
+        uri = conn->uri();
+    } else if (info) {
+        uri = info->uri;
+    } else {
+        return;
+    }
+
+    // Load existing connection info from config
+    Config *config = Config::instance();
+    ConnectionInfo connInfo = config->connectionInfo(uri);
+
+    // Open dialog in edit mode
+    auto *dialog = new ConnectionDialog(connInfo, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+    if (dialog->exec() == QDialog::Accepted) {
+        // Get the updated values
+        QString newUri = dialog->uri();
+        bool autoconnect = dialog->autoconnect();
+        QString sshKeyPath = dialog->sshKeyPath();
+        QString sshUsername = dialog->sshUsername();
+
+        // Check if URI changed (shouldn't happen in edit mode, but let's be safe)
+        if (newUri != uri) {
+            QMessageBox::warning(this, tr("Edit Connection"),
+                tr("Cannot change connection URI.\n"
+                   "To use a different URI, delete this connection and create a new one."));
+            return;
+        }
+
+        // Update the connection settings
+        config->setConnAutoconnect(uri, autoconnect);
+        config->setConnSSHKeyPath(uri, sshKeyPath);
+        config->setConnSSHUsername(uri, sshUsername);
+
+        // If connection is active, reconnect to apply new settings
+        if (conn) {
+            // IMPORTANT: Don't use removeConnection() here as it will add back as disconnected
+            // Instead, directly manipulate the model to avoid duplicates
+
+            // Unregister from Engine
+            Engine::instance()->unregisterConnection(conn);
+
+            // Remove from models
+            m_connectionModel->removeConnection(conn);
+            m_vmModel->removeConnection(conn);
+
+            // Open new connection with updated credentials
+            Connection *newConn = Connection::open(uri, sshKeyPath, QString());
+            if (newConn) {
+                addConnection(newConn);
+                m_statusLabel->setText(tr("Connection '%1' updated and reconnected").arg(uri));
+            } else {
+                // If connection failed, add back as disconnected
+                m_connectionModel->addDisconnectedConnection(uri, config->connAutoconnect(uri));
+                m_statusLabel->setText(tr("Connection '%1' updated but failed to reconnect").arg(uri));
+            }
+        } else {
+            m_statusLabel->setText(tr("Connection '%1' updated").arg(uri));
+        }
+
+        // Refresh the connection list
+        m_connectionModel->refresh();
+    }
 }
 
 void ManagerWindow::onDeleteConnection()

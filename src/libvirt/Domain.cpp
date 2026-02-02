@@ -266,6 +266,55 @@ bool Domain::setXML(const QString &xml, unsigned int flags)
     return false;
 }
 
+bool Domain::attachDevice(const QString &xml)
+{
+    if (!m_domain) {
+        return false;
+    }
+
+    if (virDomainAttachDevice(m_domain, xml.toUtf8().constData()) < 0) {
+        Error::showError(tr("Device Attach Failed"),
+                        tr("Failed to attach device to VM '%1'").arg(m_name));
+        return false;
+    }
+
+    emit configChanged();
+    return true;
+}
+
+bool Domain::detachDevice(const QString &xml)
+{
+    if (!m_domain) {
+        return false;
+    }
+
+    if (virDomainDetachDevice(m_domain, xml.toUtf8().constData()) < 0) {
+        Error::showError(tr("Device Detach Failed"),
+                        tr("Failed to detach device from VM '%1'").arg(m_name));
+        return false;
+    }
+
+    emit configChanged();
+    return true;
+}
+
+bool Domain::updateDevice(const QString &xml)
+{
+    if (!m_domain) {
+        return false;
+    }
+
+    if (virDomainUpdateDeviceFlags(m_domain, xml.toUtf8().constData(),
+                                    VIR_DOMAIN_DEVICE_MODIFY_LIVE) < 0) {
+        Error::showError(tr("Device Update Failed"),
+                        tr("Failed to update device on VM '%1'").arg(m_name));
+        return false;
+    }
+
+    emit configChanged();
+    return true;
+}
+
 quint64 Domain::maxMemory() const
 {
     return m_maxMemory;

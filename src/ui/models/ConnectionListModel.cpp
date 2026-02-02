@@ -174,7 +174,8 @@ void ConnectionListModel::addDisconnectedConnection(const QString &uri, bool aut
     }
 
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
-    auto *info = new ConnectionInfo(uri, autoconnect);
+    auto *info = new ConnectionInfo(uri);
+    info->autoconnect = autoconnect;
     m_disconnectedConnections.append(info);
     m_allURIs.insert(uri);
     endInsertRows();
@@ -228,6 +229,12 @@ QList<Connection*> ConnectionListModel::connections() const
 bool ConnectionListModel::hasConnection(const QString &uri) const
 {
     return m_allURIs.contains(uri);
+}
+
+void ConnectionListModel::refresh()
+{
+    // Emit layoutChanged to notify the view to update
+    emit layoutChanged();
 }
 
 void ConnectionListModel::onConnectionStateChanged(Connection::State state)

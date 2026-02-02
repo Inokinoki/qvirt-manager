@@ -53,6 +53,20 @@ QStringList Config::connectionURIs() const
     return m_settings.value("Connections/uris", QStringList()).toStringList();
 }
 
+ConnectionInfo Config::connectionInfo(const QString &uri) const
+{
+    ConnectionInfo info(uri);
+    info.autoconnect = connAutoconnect(uri);
+    info.sshKeyPath = connSSHKeyPath(uri);
+    info.sshUsername = connSSHUsername(uri);
+    return info;
+}
+
+bool Config::hasConnection(const QString &uri) const
+{
+    return connectionURIs().contains(uri);
+}
+
 void Config::setConnAutoconnect(const QString &uri, bool autoconnect)
 {
     m_settings.setValue(QString("Connection/%1/autoconnect").arg(uri), autoconnect);

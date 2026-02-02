@@ -121,10 +121,31 @@ void DetailsPage::populateDeviceTree()
     addDevice(memItem, "Current Memory", QString("%1 MB").arg(m_domain->currentMemory() / 1024));
     addDevice(memItem, "Max Memory", QString("%1 MB").arg(m_domain->maxMemory() / 1024));
 
-    // Boot section
+    // Boot section - parse from XML
     auto *bootItem = addDeviceCategory("Boot", "boot");
-    addDevice(bootItem, "Boot Device 1", "hd");
-    addDevice(bootItem, "Boot Device 2", "cdrom");
+    QDomDocument bootDoc;
+    QString bootXML = m_domain->getXMLDesc();
+    if (bootDoc.setContent(bootXML)) {
+        QDomElement root = bootDoc.documentElement();
+        QDomNodeList osElements = root.elementsByTagName("os");
+        if (!osElements.isEmpty()) {
+            QDomElement osElement = osElements.at(0).toElement();
+            QDomNodeList bootNodes = osElement.elementsByTagName("boot");
+            if (bootNodes.isEmpty()) {
+                addDevice(bootItem, "Boot Device", "hd (default)");
+            } else {
+                for (int i = 0; i < bootNodes.size(); ++i) {
+                    QDomElement bootElement = bootNodes.at(i).toElement();
+                    QString dev = bootElement.attribute("dev", "hd");
+                    addDevice(bootItem, QString("Boot Device %1").arg(i + 1), dev);
+                }
+            }
+        } else {
+            addDevice(bootItem, "Boot Device", "hd (default)");
+        }
+    } else {
+        addDevice(bootItem, "Boot Device", "hd (default)");
+    }
 
     // Disks section
     auto *disksItem = addDeviceCategory("Disk Devices", "drive-harddisk");
@@ -151,23 +172,98 @@ void DetailsPage::populateDeviceTree()
         addDevice(netItem, "No network interfaces", "-");
     }
 
-    // Input section
+    // Input section - parse from XML
     auto *inputItem = addDeviceCategory("Input", "input-keyboard");
-    addDevice(inputItem, "Keyboard", "usb");
-    addDevice(inputItem, "Tablet", "usb");
+    QDomDocument inputDoc;
+    QString inputXML = m_domain->getXMLDesc();
+    bool hasInputDevices = false;
+    if (inputDoc.setContent(inputXML)) {
+        QDomElement root = inputDoc.documentElement();
+        QDomNodeList inputNodes = root.elementsByTagName("input");
+        for (int i = 0; i < inputNodes.size(); ++i) {
+            QDomElement inputElement = inputNodes.at(i).toElement();
+            QString type = inputElement.attribute("type", "mouse");
+            QString bus = inputElement.attribute("bus", "ps2");
+            addDevice(inputItem, QString("%1 (%2)").arg(type, bus), bus);
+            hasInputDevices = true;
+        }
+    }
+    if (!hasInputDevices) {
+        addDevice(inputItem, "No input devices", "-");
+    }
 
-    // Graphics section
+    // Graphics section - parse from XML
     auto *gfxItem = addDeviceCategory("Display", "video-display");
-    addDevice(gfxItem, "Video", "qxl");
-    addDevice(gfxItem, "Spice Server", "spice");
+    QDomDocument gfxDoc;
+    QString gfxXML = m_domain->getXMLDesc();
+    bool hasGraphics = false;
+    if (gfxDoc.setContent(gfxXML)) {
+        QDomElement root = gfxDoc.documentElement();
+        // Parse graphics elements
+        QDomNodeList graphicsNodes = root.elementsByTagName("graphics");
+        for (int i = 0; i < graphicsNodes.size(); ++i) {
+            QDomElement gfxElement = graphicsNodes.at(i).toElement();
+            QString type = gfxElement.attribute("type", "vnc");
+            addDevice(gfxItem, QString("Graphics (%1)").arg(type), type);
+            hasGraphics = true;
+        }
+        // Parse video elements
+        QDomNodeList videoNodes = root.elementsByTagName("video");
+        for (int i = 0; i < videoNodes.size(); ++i) {
+            QDomElement videoElement = videoNodes.at(i).toElement();
+            QDomNodeList modelNodes = videoElement.elementsByTagName("model");
+            if (!modelNodes.isEmpty()) {
+                QDomElement modelElement = modelNodes.at(0).toElement();
+                QString modelType = modelElement.attribute("type", "cirrus");
+                addDevice(gfxItem, QString("Video (%1)").arg(modelType), modelType);
+                hasGraphics = true;
+            }
+        }
+    }
+    if (!hasGraphics) {
+        addDevice(gfxItem, "No graphics devices", "-");
+    }
 
-    // Sound section
+    // Sound section - parse from XML
     auto *soundItem = addDeviceCategory("Sound", "audio-card");
-    addDevice(soundItem, "Audio", "ich6");
+    QDomDocument soundDoc;
+    QString soundXML = m_domain->getXMLDesc();
+    bool hasSound = false;
+    if (soundDoc.setContent(soundXML)) {
+        QDomElement root = soundDoc.documentElement();
+        QDomNodeList soundNodes = root.elementsByTagName("sound");
+        for (int i = 0; i < soundNodes.size(); ++i) {
+            QDomElement soundElement = soundNodes.at(i).toElement();
+            QString model = soundElement.attribute("model", "ich6");
+            addDevice(soundItem, QString("Audio (%1)").arg(model), model);
+            hasSound = true;
+        }
+    }
+    if (!hasSound) {
+        addDevice(soundItem, "No sound devices", "-");
+    }
 
-    // USB section
+    // USB section - parse from XML
     auto *usbItem = addDeviceCategory("USB", "usb");
-    addDevice(usbItem, "USB Controller", "ehci");
+    QDomDocument usbDoc;
+    QString usbXML = m_domain->getXMLDesc();
+    bool hasUSB = false;
+    if (usbDoc.setContent(usbXML)) {
+        QDomElement root = usbDoc.documentElement();
+        QDomNodeList controllerNodes = root.elementsByTagName("controller");
+        for (int i = 0; i < controllerNodes.size(); ++i) {
+            QDomElement controllerElement = controllerNodes.at(i).toElement();
+            QString type = controllerElement.attribute("type", "");
+            if (type == "usb") {
+                QString model = controllerElement.attribute("model", "usb3.0");
+                addDevice(usbItem, QString("USB Controller (%1)").arg(model), model);
+                hasUSB = true;
+            }
+        }
+    }
+    if (!hasUSB) {
+        addDevice(usbItem, "No USB controllers", "-");
+    }
 
     // Expand all items by default
     for (int i = 0; i < m_deviceTree->topLevelItemCount(); ++i) {
@@ -201,17 +297,13 @@ QTreeWidgetItem* DetailsPage::addDeviceCategory(const QString &name, const QStri
         } else if (icon == "video-display" || icon == "display") {
             iconPath = ":/icons/devices/display.svg";
         } else if (icon == "audio-card" || icon == "sound") {
-            // No sound icon defined yet, use a fallback
-            iconPath = QString();
+            iconPath = ":/icons/devices/sound.svg";
         } else if (icon == "input-keyboard" || icon == "input") {
-            // No input icon defined yet, use a fallback
-            iconPath = QString();
+            iconPath = ":/icons/devices/input.svg";
         } else if (icon == "usb") {
-            // No USB icon defined yet, use a fallback
-            iconPath = QString();
+            iconPath = ":/icons/devices/usb.svg";
         } else if (icon == "boot") {
-            // No boot icon defined yet, use a fallback
-            iconPath = QString();
+            iconPath = ":/icons/devices/boot.svg";
         }
 
         if (!iconPath.isEmpty()) {
@@ -318,15 +410,52 @@ void DetailsPage::onAddHardware()
         Device *device = dialog->getCreatedDevice();
         if (device) {
             // Add device to domain
-            // For now, just show a message with the device XML
             QString xml = device->toXML();
-            QMessageBox::information(this, "Device Added",
-                "Device created successfully!\n\n" +
-                QString("Type: %1\n").arg(device->deviceTypeName()) +
-                QString("Description: %1\n\n").arg(device->description()) +
-                "XML:\n" + xml.left(500) + "...\n\n"
-                "Note: Device will be added to VM configuration in the next iteration.\n"
-                "This requires virDomainAttachDevice() or domain XML update.");
+
+            // Check if VM is running to determine if we need live attach
+            bool isRunning = (m_domain->state() == Domain::StateRunning);
+
+            if (isRunning) {
+                // Try to attach device to running VM
+                if (m_domain->attachDevice(xml)) {
+                    QMessageBox::information(this, "Device Added",
+                        QString("Device '%1' (%2) has been attached to the running VM.")
+                            .arg(device->deviceTypeName())
+                            .arg(device->description()));
+                } else {
+                    QMessageBox::warning(this, "Device Attach Failed",
+                        "Failed to attach device to the running VM.\n"
+                        "The device will be added to the persistent configuration instead.");
+                    // Fall through to persistent configuration update
+                }
+            } else {
+                // VM is not running, just update the persistent XML
+                QString domainXML = m_domain->getXMLDesc(VIR_DOMAIN_XML_INACTIVE);
+                QDomDocument doc;
+                if (doc.setContent(domainXML)) {
+                    // Parse the device XML and insert it into the domain XML
+                    QDomDocument deviceDoc;
+                    if (deviceDoc.setContent(xml)) {
+                        QDomElement devicesElement = doc.documentElement().firstChildElement("devices");
+                        if (!devicesElement.isNull()) {
+                            QDomNode importedNode = doc.importNode(deviceDoc.documentElement(), true);
+                            devicesElement.appendChild(importedNode);
+
+                            // Update the domain XML
+                            if (m_domain->setXML(doc.toString(), VIR_DOMAIN_XML_INACTIVE)) {
+                                QMessageBox::information(this, "Device Added",
+                                    QString("Device '%1' (%2) has been added to the VM configuration.\n\n"
+                                           "The device will be available when the VM is started.")
+                                        .arg(device->deviceTypeName())
+                                        .arg(device->description()));
+                            } else {
+                                QMessageBox::critical(this, "Device Add Failed",
+                                    "Failed to add device to VM configuration.");
+                            }
+                        }
+                    }
+                }
+            }
 
             // Refresh the device tree
             populateDeviceTree();
@@ -366,22 +495,128 @@ void DetailsPage::onRemoveHardware()
         QString deviceName = item->text(0);
         QString deviceType = parentName;
 
-        QMessageBox::information(this, "Device Removed",
-            QString("Device '%1' (%2) has been marked for removal.\n\n")
-                .arg(deviceName)
-                .arg(deviceType) +
-            "In production, this would:\n"
-            "1. Remove the device from VM configuration\n"
-            "2. Update the domain XML using virDomainUndefine() / virDomainDefineXML()\n"
-            "3. Handle hot-unplug for running VMs if supported\n\n"
-            "The device tree will refresh to show the updated configuration.");
+        // Get the device XML from the getDeviceXML function
+        QString deviceXML = getDeviceXML(parentName);
 
-        // Remove from tree for now
-        delete item;
+        if (deviceXML.isEmpty()) {
+            QMessageBox::warning(this, "Cannot Remove",
+                "Could not retrieve device XML for removal.\n"
+                "This device might not be removable.");
+            return;
+        }
 
-        // Refresh to show updated state
+        // Check if VM is running
+        bool isRunning = (m_domain->state() == Domain::StateRunning);
+
+        bool success = false;
+        if (isRunning) {
+            // Try to detach device from running VM
+            // Note: We need the specific device XML for the selected device
+            // For now, we'll attempt to remove it from the category XML
+            success = m_domain->detachDevice(deviceXML);
+
+            if (!success) {
+                QMessageBox::warning(this, "Device Detach Failed",
+                    "Failed to detach device from the running VM.\n"
+                    "The device might not support hot-unplug.");
+                return;
+            }
+        } else {
+            // VM is not running, update the persistent XML
+            QString domainXML = m_domain->getXMLDesc(VIR_DOMAIN_XML_INACTIVE);
+            QDomDocument doc;
+            if (!doc.setContent(domainXML)) {
+                QMessageBox::critical(this, "Cannot Remove",
+                    "Failed to parse domain XML.");
+                return;
+            }
+
+            // Remove the device element from the domain XML
+            QDomElement root = doc.documentElement();
+            QDomElement devicesElement = root.firstChildElement("devices");
+            if (devicesElement.isNull()) {
+                QMessageBox::critical(this, "Cannot Remove",
+                    "No devices element in domain XML.");
+                return;
+            }
+
+            // Find and remove the specific device
+            bool deviceRemoved = false;
+            QDomNode deviceNode = findDeviceNode(devicesElement, parentName, deviceName);
+            if (!deviceNode.isNull()) {
+                devicesElement.removeChild(deviceNode);
+                deviceRemoved = true;
+            }
+
+            if (!deviceRemoved) {
+                QMessageBox::warning(this, "Cannot Remove",
+                    QString("Could not find device '%1' in the configuration.").arg(deviceName));
+                return;
+            }
+
+            // Update the domain XML
+            if (m_domain->setXML(doc.toString(), VIR_DOMAIN_XML_INACTIVE)) {
+                success = true;
+            }
+        }
+
+        if (success) {
+            QMessageBox::information(this, "Device Removed",
+                QString("Device '%1' (%2) has been removed.")
+                    .arg(deviceName)
+                    .arg(deviceType));
+        } else {
+            QMessageBox::critical(this, "Device Remove Failed",
+                "Failed to remove device from VM configuration.");
+            return;
+        }
+
+        // Refresh the device tree to show updated state
         populateDeviceTree();
     }
+}
+
+QDomNode DetailsPage::findDeviceNode(QDomElement &devicesElement, const QString &category, const QString &deviceName)
+{
+    // Map category names to XML element types
+    QString elementType;
+    if (category == "Disk Devices") {
+        elementType = "disk";
+    } else if (category == "Network Interfaces") {
+        elementType = "interface";
+    } else if (category == "Input") {
+        elementType = "input";
+    } else if (category == "Display") {
+        elementType = "graphics";  // or "video"
+    } else if (category == "Sound") {
+        elementType = "sound";
+    } else if (category == "USB") {
+        elementType = "controller";
+    } else {
+        return QDomNode();
+    }
+
+    QDomNodeList nodes = devicesElement.elementsByTagName(elementType);
+    for (int i = 0; i < nodes.size(); ++i) {
+        QDomNode node = nodes.at(i);
+        // Try to match the device name with some property of the node
+        // This is a simplified approach - in production you'd match more precisely
+        QDomElement element = node.toElement();
+        QString target = element.attribute("dev");
+        if (target.isEmpty()) {
+            QDomNodeList targetNodes = element.elementsByTagName("target");
+            if (!targetNodes.isEmpty()) {
+                target = targetNodes.at(0).toElement().attribute("dev");
+            }
+        }
+
+        // Check if this matches the device we want to remove
+        if (deviceName.contains(target) || deviceName.contains(element.attribute("type"))) {
+            return node;
+        }
+    }
+
+    return QDomNode();
 }
 
 void DetailsPage::refresh()

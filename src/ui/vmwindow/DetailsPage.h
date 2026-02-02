@@ -51,6 +51,7 @@ private:
     void populateDeviceTree();
     QTreeWidgetItem* addDeviceCategory(const QString &name, const QString &icon);
     QTreeWidgetItem* addDevice(QTreeWidgetItem *parent, const QString &name, const QString &details);
+    QString getDeviceXML(const QString &categoryName);
 
     // Domain reference
     Domain *m_domain;

@@ -16,6 +16,8 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QIcon>
+#include <QDomDocument>
+#include <QTextStream>
 
 namespace QVirt {
 
@@ -264,21 +266,43 @@ void DetailsPage::onDeviceSelected(QTreeWidgetItem *item, int column)
     details += "<h4>Raw XML</h4>";
     details += "<pre>";
 
-    // If this is the Overview, show domain XML
-    if (item->text(0) == "Overview") {
+    QString formattedXML;
+    if (deviceName == "Overview") {
+        // Format the domain XML using QDomDocument for proper indentation
         QString xml = m_domain->getXMLDesc();
-        // Show first 50 lines to avoid overwhelming display
-        QStringList lines = xml.split('\n');
-        if (lines.size() > 50) {
-            details += lines.mid(0, 50).join('\n');
-            details += "\n... (truncated)";
+        QDomDocument doc;
+        QString errorMsg;
+        int errorLine = 0, errorColumn = 0;
+
+        if (doc.setContent(xml, &errorMsg, &errorLine, &errorColumn)) {
+            // Convert to formatted string
+            QString buffer;
+            QTextStream stream(&buffer);
+            doc.save(stream, 2);  // Indent with 2 spaces
+            stream.flush();
+            formattedXML = buffer;
+
+            // Truncate if too long (more than 100 lines)
+            QStringList lines = formattedXML.split('\n');
+            if (lines.size() > 100) {
+                formattedXML = lines.mid(0, 100).join('\n') + "\n... (truncated)";
+            }
         } else {
-            details += xml;
+            formattedXML = QString("<!-- Error parsing XML: %1 -->").arg(errorMsg);
         }
     } else {
-        details += "&lt;!-- Device XML would be shown here --&gt;\n";
-        details += "&lt;!-- Full XML parsing will be implemented in Phase 6 --&gt;";
+        // For device categories, extract relevant XML section
+        formattedXML = getDeviceXML(deviceName);
+        if (formattedXML.isEmpty()) {
+            formattedXML = "<!-- No XML available for this device (category: " + deviceName + ") -->\n";
+        }
     }
+
+    // HTML escape the formatted XML for display
+    formattedXML = formattedXML.replace("&", "&amp;");
+    formattedXML = formattedXML.replace("<", "&lt;");
+    formattedXML = formattedXML.replace(">", "&gt;");
+    details += formattedXML;
 
     details += "</pre>";
 
@@ -364,6 +388,105 @@ void DetailsPage::refresh()
 {
     m_domain->updateInfo();
     populateDeviceTree();
+}
+
+QString DetailsPage::getDeviceXML(const QString &categoryName)
+{
+    QString domainXML = m_domain->getXMLDesc();
+    if (domainXML.isEmpty()) {
+        return "<!-- Error: Could not retrieve domain XML -->";
+    }
+
+    QDomDocument doc;
+    QString errorMsg;
+    int errorLine = 0, errorColumn = 0;
+
+    if (!doc.setContent(domainXML, &errorMsg, &errorLine, &errorColumn)) {
+        return QString("<!-- Error parsing XML at line %1, column %2: %3 -->")
+            .arg(errorLine).arg(errorColumn).arg(errorMsg);
+    }
+
+    QDomElement root = doc.documentElement();
+
+    // Helper function to convert node to XML string with proper formatting
+    auto nodeToString = [](const QDomNode& node) -> QString {
+        QString result;
+        QTextStream stream(&result);
+        node.save(stream, 2);  // Indent with 2 spaces
+        stream.flush();  // Ensure all content is written
+        return result;
+    };
+
+    QStringList elements;
+
+    if (categoryName == "CPU") {
+        QDomNodeList vcpus = root.elementsByTagName("vcpu");
+        for (int i = 0; i < vcpus.size(); ++i) {
+            elements << nodeToString(vcpus.at(i));
+        }
+        QDomNodeList features = root.elementsByTagName("features");
+        for (int i = 0; i < features.size(); ++i) {
+            elements << nodeToString(features.at(i));
+        }
+    } else if (categoryName == "Memory") {
+        QDomNodeList memory = root.elementsByTagName("memory");
+        for (int i = 0; i < memory.size(); ++i) {
+            elements << nodeToString(memory.at(i));
+        }
+        QDomNodeList currentMemory = root.elementsByTagName("currentMemory");
+        for (int i = 0; i < currentMemory.size(); ++i) {
+            elements << nodeToString(currentMemory.at(i));
+        }
+    } else if (categoryName == "Boot") {
+        QDomNodeList osElements = root.elementsByTagName("os");
+        for (int i = 0; i < osElements.size(); ++i) {
+            elements << nodeToString(osElements.at(i));
+        }
+    } else if (categoryName == "Disk Devices") {
+        QDomNodeList disks = root.elementsByTagName("disk");
+        for (int i = 0; i < disks.size(); ++i) {
+            elements << nodeToString(disks.at(i));
+        }
+    } else if (categoryName == "Network Interfaces") {
+        QDomNodeList interfaces = root.elementsByTagName("interface");
+        for (int i = 0; i < interfaces.size(); ++i) {
+            elements << nodeToString(interfaces.at(i));
+        }
+    } else if (categoryName == "Input") {
+        QDomNodeList inputs = root.elementsByTagName("input");
+        for (int i = 0; i < inputs.size(); ++i) {
+            elements << nodeToString(inputs.at(i));
+        }
+    } else if (categoryName == "Display") {
+        QDomNodeList graphics = root.elementsByTagName("graphics");
+        for (int i = 0; i < graphics.size(); ++i) {
+            elements << nodeToString(graphics.at(i));
+        }
+        QDomNodeList videos = root.elementsByTagName("video");
+        for (int i = 0; i < videos.size(); ++i) {
+            elements << nodeToString(videos.at(i));
+        }
+    } else if (categoryName == "Sound") {
+        QDomNodeList sounds = root.elementsByTagName("sound");
+        for (int i = 0; i < sounds.size(); ++i) {
+            elements << nodeToString(sounds.at(i));
+        }
+    } else if (categoryName == "USB") {
+        QDomNodeList controllers = root.elementsByTagName("controller");
+        for (int i = 0; i < controllers.size(); ++i) {
+            QDomElement controller = controllers.at(i).toElement();
+            if (!controller.isNull() && controller.attribute("type") == "usb") {
+                elements << nodeToString(controller);
+            }
+        }
+    }
+
+    if (elements.isEmpty()) {
+        return QString();
+    }
+
+    // Join elements with newlines for proper formatting
+    return elements.join("\n");
 }
 
 } // namespace QVirt

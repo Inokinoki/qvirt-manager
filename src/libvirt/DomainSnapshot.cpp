@@ -78,8 +78,9 @@ bool DomainSnapshot::isCurrent() const
     }
 
     // Check if this is the current snapshot
-    // TODO: Implement proper check
-    return false;
+    // A snapshot is current if it has no parent
+    virDomainSnapshotPtr parent = virDomainSnapshotGetParent(m_snapshot, 0);
+    return (parent == nullptr);
 }
 
 bool DomainSnapshot::delete_(unsigned int flags)
@@ -102,14 +103,46 @@ bool DomainSnapshot::revert(unsigned int flags)
 
 DomainSnapshot *DomainSnapshot::parent() const
 {
-    // TODO: Implement parent lookup
-    return nullptr;
+    if (!m_snapshot || !m_domain) {
+        return nullptr;
+    }
+
+    // Lookup parent snapshot
+    virDomainSnapshotPtr parentSnap = virDomainSnapshotGetParent(m_snapshot, 0);
+    if (!parentSnap) {
+        return nullptr;
+    }
+
+    // Create a new DomainSnapshot wrapper for the parent
+    return new DomainSnapshot(parentSnap, m_domain, const_cast<DomainSnapshot*>(this));
 }
 
 QList<DomainSnapshot*> DomainSnapshot::children() const
 {
-    // TODO: Implement children lookup
-    return QList<DomainSnapshot*>();
+    if (!m_snapshot || !m_domain) {
+        return QList<DomainSnapshot*>();
+    }
+
+    QList<DomainSnapshot*> childrenList;
+
+    // List child snapshots - virDomainSnapshotListAllChildren returns
+    // virDomainSnapshotPtr** directly, not names
+    virDomainSnapshotPtr *snaps = nullptr;
+    int numChildren = virDomainSnapshotListAllChildren(m_snapshot, &snaps, 0);
+    if (numChildren < 0) {
+        return childrenList;
+    }
+
+    for (int i = 0; i < numChildren; i++) {
+        if (snaps[i]) {
+            childrenList.append(new DomainSnapshot(snaps[i], m_domain,
+                const_cast<DomainSnapshot*>(this)));
+        }
+    }
+
+    // Free the array of snapshot pointers
+    free(snaps);
+    return childrenList;
 }
 
 QString DomainSnapshot::getXMLDesc(unsigned int flags)

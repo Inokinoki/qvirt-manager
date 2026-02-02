@@ -20,6 +20,7 @@
 namespace QVirt {
 
 class Connection;
+class ManagerWindow;
 
 /**
  * @brief Main application engine (singleton)
@@ -53,6 +54,18 @@ public:
      */
     void showManager();
 
+    /**
+     * @brief Register a connection with the engine
+     * @param conn Connection to register
+     */
+    void registerConnection(Connection *conn);
+
+    /**
+     * @brief Unregister a connection from the engine
+     * @param conn Connection to unregister
+     */
+    void unregisterConnection(Connection *conn);
+
 signals:
     /**
      * @brief Emitted when the application is closing
@@ -73,6 +86,7 @@ private:
 
     QTimer *m_tickTimer;
     QMap<QString, Connection *> m_connections;
+    ManagerWindow *m_managerWindow;
 };
 
 } // namespace QVirt

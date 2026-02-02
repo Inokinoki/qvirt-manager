@@ -110,6 +110,7 @@ target_link_libraries(qvirt-devices
         qvirt-core
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 # UI components

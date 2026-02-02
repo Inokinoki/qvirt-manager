@@ -21,6 +21,8 @@
 #include <QSplitter>
 #include <QTextEdit>
 #include <QGroupBox>
+#include <QDomNode>
+#include <QDomElement>
 
 #include "../../libvirt/Domain.h"
 
@@ -51,6 +53,8 @@ private:
     void populateDeviceTree();
     QTreeWidgetItem* addDeviceCategory(const QString &name, const QString &icon);
     QTreeWidgetItem* addDevice(QTreeWidgetItem *parent, const QString &name, const QString &details);
+    QString getDeviceXML(const QString &categoryName);
+    QDomNode findDeviceNode(QDomElement &devicesElement, const QString &category, const QString &deviceName);
 
     // Domain reference
     Domain *m_domain;

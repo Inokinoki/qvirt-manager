@@ -10,6 +10,7 @@
  */
 
 #include "InputDevice.h"
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -47,10 +48,29 @@ QString InputDevice::toXML() const
 
 bool InputDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
-    Q_UNUSED(xml);
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "input") {
+        return false;
+    }
+
+    // Parse type attribute
+    QString typeStr = root.attribute("type");
+    if (!typeStr.isEmpty()) {
+        m_inputType = stringToInputType(typeStr);
+    }
+
+    // Parse bus attribute
+    QString busStr = root.attribute("bus");
+    if (!busStr.isEmpty()) {
+        m_bus = stringToBusType(busStr);
+    }
+
+    return true;
 }
 
 QString InputDevice::inputTypeToString(InputType type)

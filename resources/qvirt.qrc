@@ -18,5 +18,9 @@
         <file>icons/devices/cpu.svg</file>
         <file>icons/devices/memory.svg</file>
         <file>icons/devices/display.svg</file>
+        <file>icons/devices/sound.svg</file>
+        <file>icons/devices/input.svg</file>
+        <file>icons/devices/usb.svg</file>
+        <file>icons/devices/boot.svg</file>
     </qresource>
 </RCC>

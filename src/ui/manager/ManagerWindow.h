@@ -70,6 +70,11 @@ private slots:
     void showStoragePools();
     void showNetworks();
     void refresh();
+    void onConnectionContextMenu(const QPoint &pos);
+    void onConnectToConnection();
+    void onDisconnectFromConnection();
+    void onEditConnection();
+    void onDeleteConnection();
 
 private:
     void setupUI();

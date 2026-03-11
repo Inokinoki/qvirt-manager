@@ -1,8 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <!-- Stylesheets -->
-        <file>styles/default.qss</file>
-
         <!-- Application Icon -->
         <file>icons/app/qvirt-manager.svg</file>
 

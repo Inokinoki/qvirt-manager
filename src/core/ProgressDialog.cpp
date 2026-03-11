@@ -33,7 +33,6 @@ ProgressDialog::ProgressDialog(const QString &title, const QString &labelText,
     // Create details label
     m_detailsLabel = new QLabel();
     m_detailsLabel->setWordWrap(true);
-    m_detailsLabel->setStyleSheet("QLabel { color: #666; font-size: 10px; }");
 
     // Create layout for labels
     auto *labelLayout = new QVBoxLayout();
@@ -90,7 +89,6 @@ void ProgressDialog::finishJob()
 void ProgressDialog::setError(const QString &error)
 {
     m_statusLabel->setText(tr("Error"));
-    m_statusLabel->setStyleSheet("QLabel { color: red; font-weight: bold; }");
     m_detailsLabel->setText(error);
     setCancelButtonText(tr("Close"));
 }

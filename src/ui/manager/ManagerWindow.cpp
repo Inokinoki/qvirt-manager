@@ -38,7 +38,6 @@ ManagerWindow::ManagerWindow(QWidget *parent)
     setWindowTitle(tr("QVirt Manager"));
     resize(1024, 768);
 
-    applyStylesheet();
     setupMenus();
     setupToolbar();
     setupUI();
@@ -721,25 +720,6 @@ void ManagerWindow::setupKeyboardShortcuts()
 {
     m_keyboardShortcuts = new KeyboardShortcuts(this);
     m_keyboardShortcuts->setupShortcuts(this);
-}
-
-void ManagerWindow::applyStylesheet()
-{
-    // Try to load stylesheet from resources
-    QFile file(":/styles/default.qss");
-    if (file.open(QIODevice::ReadOnly)) {
-        QString style = QString::fromUtf8(file.readAll());
-        qApp->setStyleSheet(style);
-        file.close();
-    } else {
-        // Fallback: try loading from file system
-        QFile fsFile("resources/styles/default.qss");
-        if (fsFile.open(QIODevice::ReadOnly)) {
-            QString style = QString::fromUtf8(fsFile.readAll());
-            qApp->setStyleSheet(style);
-            fsFile.close();
-        }
-    }
 }
 
 void ManagerWindow::onConnectionContextMenu(const QPoint &pos)

@@ -83,7 +83,6 @@ private:
     void connectSignals();
     void setupKeyboardShortcuts();
     void updateVMControls();
-    void applyStylesheet();
 
     // UI components
     QSplitter *m_splitter;

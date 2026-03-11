@@ -79,7 +79,6 @@ PoolTypePage::PoolTypePage(QWidget *parent)
     // Description
     auto *descLabel = new QLabel();
     descLabel->setWordWrap(true);
-    descLabel->setStyleSheet("QLabel { padding: 10px; }");
     layout->addWidget(descLabel);
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),

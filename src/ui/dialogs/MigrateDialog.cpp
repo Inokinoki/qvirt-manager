@@ -138,7 +138,6 @@ void MigrateDialog::setupUI()
     // Status label
     m_statusLabel = new QLabel("Ready to migrate");
     m_statusLabel->setWordWrap(true);
-    m_statusLabel->setStyleSheet("QLabel { padding: 10px; }");
     mainLayout->addWidget(m_statusLabel);
 
     // Buttons

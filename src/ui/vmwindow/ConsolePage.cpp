@@ -124,7 +124,6 @@ void ConsolePage::setupInfoView()
 
     // Title
     auto *titleLabel = new QLabel("Console Information", m_infoWidget);
-    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold;");
     layout->addWidget(titleLabel);
 
     layout->addSpacing(20);
@@ -172,7 +171,6 @@ void ConsolePage::setupPlaceholderView()
 
     auto *label = new QLabel("Console Viewer", m_placeholderWidget);
     label->setAlignment(Qt::AlignCenter);
-    label->setStyleSheet("font-size: 18px; font-weight: bold; padding: 50px;");
     layout->addWidget(label);
 
     auto *infoLabel = new QLabel(

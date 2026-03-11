@@ -182,9 +182,7 @@ sudo apt install qvirt-manager
 
 ## Documentation
 
-- [User Manual](doc/user-manual.md) - Complete usage guide
-- [Installation Guide](doc/installation.md) - Build and install instructions
-- [TODO.md](TODO.md) - Project roadmap and implementation status
+See the [Installation](#installation) section above for build instructions.
 
 ## Development
 

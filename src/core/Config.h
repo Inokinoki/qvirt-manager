@@ -21,6 +21,20 @@
 namespace QVirt {
 
 /**
+ * @brief Connection information structure
+ */
+struct ConnectionInfo
+{
+    QString uri;
+    bool autoconnect = false;
+    QString sshKeyPath;
+    QString sshUsername;
+
+    ConnectionInfo() = default;
+    explicit ConnectionInfo(const QString &uri) : uri(uri) {}
+};
+
+/**
  * @brief Application configuration manager
  *
  * Manages application settings using QSettings
@@ -43,8 +57,18 @@ public:
     void removeConnectionURI(const QString &uri);
     QStringList connectionURIs() const;
 
+    ConnectionInfo connectionInfo(const QString &uri) const;
+    bool hasConnection(const QString &uri) const;
+
     void setConnAutoconnect(const QString &uri, bool autoconnect);
     bool connAutoconnect(const QString &uri) const;
+
+    // SSH credentials for connections
+    void setConnSSHKeyPath(const QString &uri, const QString &keyPath);
+    QString connSSHKeyPath(const QString &uri) const;
+
+    void setConnSSHUsername(const QString &uri, const QString &username);
+    QString connSSHUsername(const QString &uri) const;
 
     // Per-VM settings
     void setVMWindowSize(const QString &uri, const QString &uuid, const QSize &size);

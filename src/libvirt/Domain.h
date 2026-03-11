@@ -93,6 +93,11 @@ public:
     QString getXMLDesc(unsigned int flags = 0) const;
     bool setXML(const QString &xml, unsigned int flags = 0);
 
+    // Device manipulation
+    bool attachDevice(const QString &xml);
+    bool detachDevice(const QString &xml);
+    bool updateDevice(const QString &xml);
+
     // Resources
     quint64 maxMemory() const;  // in KB
     quint64 memory() const;

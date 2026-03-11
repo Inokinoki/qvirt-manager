@@ -10,6 +10,7 @@
  */
 
 #include "GraphicsDevice.h"
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -74,10 +75,87 @@ QString GraphicsDevice::toXML() const
 
 bool GraphicsDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
-    Q_UNUSED(xml);
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "graphics") {
+        return false;
+    }
+
+    // Parse type attribute
+    QString typeStr = root.attribute("type");
+    if (!typeStr.isEmpty()) {
+        m_graphicsType = stringToGraphicsType(typeStr);
+    }
+
+    // Parse port
+    QString portStr = root.attribute("port");
+    if (!portStr.isEmpty()) {
+        m_port = portStr.toInt();
+    }
+
+    // Parse TLS port
+    QString tlsPortStr = root.attribute("tlsPort");
+    if (!tlsPortStr.isEmpty()) {
+        m_tlsPort = tlsPortStr.toInt();
+        m_tlsPortEnabled = true;
+    }
+
+    // Parse autoport
+    QString autoPortStr = root.attribute("autoport");
+    if (!autoPortStr.isEmpty()) {
+        m_autoPort = (autoPortStr.toLower() == "yes");
+    }
+
+    // Parse listen attribute (simple form)
+    QString listenAttr = root.attribute("listen");
+    if (!listenAttr.isEmpty()) {
+        m_listenAddress = listenAttr;
+    }
+
+    // Parse listen elements (complex form)
+    QDomNodeList listenNodes = root.elementsByTagName("listen");
+    if (listenNodes.size() > 0) {
+        QDomElement listenElem = listenNodes.item(0).toElement();
+        QString listenTypeStr = listenElem.attribute("type");
+
+        if (listenTypeStr == "address") {
+            m_listenType = ListenType::Address;
+            m_listenAddress = listenElem.attribute("address");
+        } else if (listenTypeStr == "network") {
+            m_listenType = ListenType::Network;
+            m_listenAddress = listenElem.attribute("network");
+        } else if (listenTypeStr == "socket") {
+            m_listenType = ListenType::Socket;
+            m_listenAddress = listenElem.attribute("socket");
+        }
+    }
+
+    // Parse keymap
+    m_keyMap = root.attribute("keymap");
+    if (m_keyMap.isEmpty()) {
+        m_keyMap = "en-us";
+    }
+
+    // Parse password
+    QString password = root.attribute("passwd");
+    if (!password.isEmpty()) {
+        m_password = password;
+        m_passwordEnabled = true;
+    }
+
+    // Look for password element as well
+    QDomNodeList passwordNodes = root.elementsByTagName("password");
+    if (passwordNodes.size() > 0) {
+        QDomElement passwordElem = passwordNodes.item(0).toElement();
+        m_password = passwordElem.text();
+        m_passwordEnabled = true;
+    }
+
+    return true;
 }
 
 QString GraphicsDevice::graphicsTypeToString(GraphicsType type)

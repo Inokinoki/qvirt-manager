@@ -17,6 +17,13 @@
 #include "../../devices/GraphicsDevice.h"
 #include "../../devices/VideoDevice.h"
 #include "../../devices/SoundDevice.h"
+#include "../../devices/TPMDevice.h"
+#include "../../devices/HostDevice.h"
+#include "../../devices/FileSystemDevice.h"
+#include "../../devices/WatchdogDevice.h"
+#include "../../devices/RNGDevice.h"
+#include "../../devices/SmartcardDevice.h"
+#include "../../devices/MemballoonDevice.h"
 #include "../../core/Error.h"
 
 #include <QMessageBox>
@@ -101,6 +108,34 @@ void AddHardwareDialog::setupDeviceList()
     item->setData(Qt::UserRole, static_cast<int>(DeviceType::Sound));
     m_deviceList->addItem(item);
 
+    item = new QListWidgetItem("Host Devices");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::HostDevice));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Filesystem");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Filesystem));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("TPM");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::TPM));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("RNG");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::RNG));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Watchdog");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Watchdog));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Smartcard");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Smartcard));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Memory Balloon");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Memballoon));
+    m_deviceList->addItem(item);
+
     m_deviceList->setCurrentRow(0);
 }
 
@@ -114,6 +149,13 @@ void AddHardwareDialog::setupDevicePages()
     auto *graphicsPage = new GraphicsDevicePage(this);
     auto *videoPage = new VideoDevicePage(this);
     auto *soundPage = new SoundDevicePage(this);
+    auto *tpmPage = new TPMDevicePage(this);
+    auto *hostDevicePage = new HostDevicePage(this);
+    auto *filesystemPage = new FileSystemDevicePage(this);
+    auto *watchdogPage = new WatchdogDevicePage(this);
+    auto *rngPage = new RNGDevicePage(this);
+    auto *smartcardPage = new SmartcardDevicePage(this);
+    auto *memballoonPage = new MemballoonDevicePage(this);
 
     m_pageStack->addWidget(storagePage);
     m_pageStack->addWidget(networkPage);
@@ -122,6 +164,13 @@ void AddHardwareDialog::setupDevicePages()
     m_pageStack->addWidget(graphicsPage);
     m_pageStack->addWidget(videoPage);
     m_pageStack->addWidget(soundPage);
+    m_pageStack->addWidget(tpmPage);
+    m_pageStack->addWidget(hostDevicePage);
+    m_pageStack->addWidget(filesystemPage);
+    m_pageStack->addWidget(rngPage);
+    m_pageStack->addWidget(watchdogPage);
+    m_pageStack->addWidget(smartcardPage);
+    m_pageStack->addWidget(memballoonPage);
 }
 
 void AddHardwareDialog::onDeviceTypeChanged(QListWidgetItem *current, QListWidgetItem *previous)
@@ -157,6 +206,27 @@ void AddHardwareDialog::onDeviceTypeChanged(QListWidgetItem *current, QListWidge
         break;
     case DeviceType::Sound:
         m_pageStack->setCurrentIndex(6);
+        break;
+    case DeviceType::TPM:
+        m_pageStack->setCurrentIndex(7);
+        break;
+    case DeviceType::HostDevice:
+        m_pageStack->setCurrentIndex(8);
+        break;
+    case DeviceType::Filesystem:
+        m_pageStack->setCurrentIndex(9);
+        break;
+    case DeviceType::RNG:
+        m_pageStack->setCurrentIndex(10);
+        break;
+    case DeviceType::Watchdog:
+        m_pageStack->setCurrentIndex(11);
+        break;
+    case DeviceType::Smartcard:
+        m_pageStack->setCurrentIndex(12);
+        break;
+    case DeviceType::Memballoon:
+        m_pageStack->setCurrentIndex(13);
         break;
     default:
         break;
@@ -588,6 +658,430 @@ Device* SoundDevicePage::createDevice()
 }
 
 bool SoundDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// TPMDevicePage
+//=============================================================================
+
+TPMDevicePage::TPMDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void TPMDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Model
+    m_modelCombo = new QComboBox();
+    m_modelCombo->addItem("TIS", static_cast<int>(TPMDevice::TPMModel::TIS));
+    m_modelCombo->addItem("CRB", static_cast<int>(TPMDevice::TPMModel::CRB));
+    m_modelCombo->addItem("SPAPR", static_cast<int>(TPMDevice::TPMModel::SPAPR));
+    layout->addRow("Model:", m_modelCombo);
+
+    // Backend
+    m_backendCombo = new QComboBox();
+    m_backendCombo->addItem("Emulator", static_cast<int>(TPMDevice::TPMBackend::Emulator));
+    m_backendCombo->addItem("Passthrough", static_cast<int>(TPMDevice::TPMBackend::Passthrough));
+    layout->addRow("Backend:", m_backendCombo);
+
+    // Version
+    m_versionCombo = new QComboBox();
+    m_versionCombo->addItem("1.2", static_cast<int>(TPMDevice::TPMVersion::V1_2));
+    m_versionCombo->addItem("2.0", static_cast<int>(TPMDevice::TPMVersion::V2_0));
+    layout->addRow("Version:", m_versionCombo);
+
+    // Device path (for passthrough)
+    m_devicePathEdit = new QLineEdit();
+    layout->addRow("Device Path:", m_devicePathEdit);
+}
+
+Device* TPMDevicePage::createDevice()
+{
+    auto *tpm = new TPMDevice();
+
+    tpm->setModel(static_cast<TPMDevice::TPMModel>(m_modelCombo->currentData().toInt()));
+    tpm->setBackend(static_cast<TPMDevice::TPMBackend>(m_backendCombo->currentData().toInt()));
+    tpm->setVersion(static_cast<TPMDevice::TPMVersion>(m_versionCombo->currentData().toInt()));
+    tpm->setDevicePath(m_devicePathEdit->text());
+
+    return tpm;
+}
+
+bool TPMDevicePage::validate()
+{
+    auto backend = static_cast<TPMDevice::TPMBackend>(m_backendCombo->currentData().toInt());
+    if (backend == TPMDevice::TPMBackend::Passthrough && m_devicePathEdit->text().isEmpty()) {
+        return false;
+    }
+    return true;
+}
+
+//=============================================================================
+// HostDevicePage
+//=============================================================================
+
+HostDevicePage::HostDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void HostDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Device type
+    m_deviceTypeCombo = new QComboBox();
+    m_deviceTypeCombo->addItem("USB", static_cast<int>(HostDevice::HostDeviceType::USB));
+    m_deviceTypeCombo->addItem("PCI", static_cast<int>(HostDevice::HostDeviceType::PCI));
+    layout->addRow("Device Type:", m_deviceTypeCombo);
+
+    // USB mode
+    m_usbModeCombo = new QComboBox();
+    m_usbModeCombo->addItem("Bus", static_cast<int>(HostDevice::USBMode::Bus));
+    m_usbModeCombo->addItem("Vendor/Product", static_cast<int>(HostDevice::USBMode::Device));
+    layout->addRow("USB Mode:", m_usbModeCombo);
+
+    // USB Bus
+    m_usbBusSpin = new QSpinBox();
+    m_usbBusSpin->setRange(0, 255);
+    layout->addRow("USB Bus:", m_usbBusSpin);
+
+    // USB Device
+    m_usbDeviceSpin = new QSpinBox();
+    m_usbDeviceSpin->setRange(0, 255);
+    layout->addRow("USB Device:", m_usbDeviceSpin);
+
+    // Vendor ID
+    m_vendorIdEdit = new QLineEdit();
+    m_vendorIdEdit->setPlaceholderText("0x1234");
+    layout->addRow("Vendor ID:", m_vendorIdEdit);
+
+    // Product ID
+    m_productIdEdit = new QLineEdit();
+    m_productIdEdit->setPlaceholderText("0x5678");
+    layout->addRow("Product ID:", m_productIdEdit);
+}
+
+Device* HostDevicePage::createDevice()
+{
+    auto *host = new HostDevice();
+
+    auto deviceType = static_cast<HostDevice::HostDeviceType>(m_deviceTypeCombo->currentData().toInt());
+    host->setHostDeviceType(deviceType);
+
+    if (deviceType == HostDevice::HostDeviceType::USB) {
+        auto usbMode = static_cast<HostDevice::USBMode>(m_usbModeCombo->currentData().toInt());
+        host->setUsbMode(usbMode);
+        host->setUsbBus(m_usbBusSpin->value());
+        host->setUsbDevice(m_usbDeviceSpin->value());
+        host->setUsbVendorId(m_vendorIdEdit->text());
+        host->setUsbProductId(m_productIdEdit->text());
+    }
+
+    return host;
+}
+
+bool HostDevicePage::validate()
+{
+    auto deviceType = static_cast<HostDevice::HostDeviceType>(m_deviceTypeCombo->currentData().toInt());
+    if (deviceType == HostDevice::HostDeviceType::USB) {
+        auto usbMode = static_cast<HostDevice::USBMode>(m_usbModeCombo->currentData().toInt());
+        if (usbMode == HostDevice::USBMode::Device) {
+            if (m_vendorIdEdit->text().isEmpty() || m_productIdEdit->text().isEmpty()) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+//=============================================================================
+// FileSystemDevicePage
+//=============================================================================
+
+FileSystemDevicePage::FileSystemDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void FileSystemDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Driver
+    m_driverCombo = new QComboBox();
+    m_driverCombo->addItem("virtio-fs", static_cast<int>(FileSystemDevice::DriverType::VirtioFS));
+    m_driverCombo->addItem("9p", static_cast<int>(FileSystemDevice::DriverType::Virtio9P));
+    layout->addRow("Driver:", m_driverCombo);
+
+    // Source path
+    m_sourcePathEdit = new QLineEdit();
+    m_sourcePathEdit->setPlaceholderText("/host/path");
+    layout->addRow("Source Path:", m_sourcePathEdit);
+
+    // Target directory
+    m_targetDirEdit = new QLineEdit();
+    m_targetDirEdit->setPlaceholderText("/guest/path");
+    layout->addRow("Target Directory:", m_targetDirEdit);
+
+    // Mount tag
+    m_mountTagEdit = new QLineEdit();
+    m_mountTagEdit->setPlaceholderText("mytag");
+    layout->addRow("Mount Tag:", m_mountTagEdit);
+
+    // Access mode
+    m_accessModeCombo = new QComboBox();
+    m_accessModeCombo->addItem("Passthrough", static_cast<int>(FileSystemDevice::AccessMode::Passthrough));
+    m_accessModeCombo->addItem("Mapped", static_cast<int>(FileSystemDevice::AccessMode::Mapped));
+    m_accessModeCombo->addItem("Squash", static_cast<int>(FileSystemDevice::AccessMode::Squash));
+    layout->addRow("Access Mode:", m_accessModeCombo);
+
+    // Read-only
+    m_readonlyCheck = new QCheckBox();
+    layout->addRow("Read-only:", m_readonlyCheck);
+}
+
+Device* FileSystemDevicePage::createDevice()
+{
+    auto *fs = new FileSystemDevice();
+
+    fs->setDriverType(static_cast<FileSystemDevice::DriverType>(m_driverCombo->currentData().toInt()));
+    fs->setSourcePath(m_sourcePathEdit->text());
+    fs->setTargetDir(m_targetDirEdit->text());
+    fs->setMountTag(m_mountTagEdit->text());
+    fs->setAccessMode(static_cast<FileSystemDevice::AccessMode>(m_accessModeCombo->currentData().toInt()));
+    fs->setReadonly(m_readonlyCheck->isChecked());
+
+    return fs;
+}
+
+bool FileSystemDevicePage::validate()
+{
+    if (m_sourcePathEdit->text().isEmpty()) {
+        return false;
+    }
+    if (m_targetDirEdit->text().isEmpty()) {
+        return false;
+    }
+    return true;
+}
+
+//=============================================================================
+// WatchdogDevicePage
+//=============================================================================
+
+WatchdogDevicePage::WatchdogDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void WatchdogDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Model
+    m_modelCombo = new QComboBox();
+    m_modelCombo->addItem("i6300esb", static_cast<int>(WatchdogDevice::WatchdogModel::I6300ESB));
+    m_modelCombo->addItem("ib700", static_cast<int>(WatchdogDevice::WatchdogModel::IB700));
+    m_modelCombo->addItem("diag288", static_cast<int>(WatchdogDevice::WatchdogModel::Diag288));
+    m_modelCombo->addItem("itco", static_cast<int>(WatchdogDevice::WatchdogModel::ITCo));
+    m_modelCombo->addItem("aspeed", static_cast<int>(WatchdogDevice::WatchdogModel::ASpeed));
+    layout->addRow("Model:", m_modelCombo);
+
+    // Action
+    m_actionCombo = new QComboBox();
+    m_actionCombo->addItem("Reset", static_cast<int>(WatchdogDevice::WatchdogAction::Reset));
+    m_actionCombo->addItem("Shutdown", static_cast<int>(WatchdogDevice::WatchdogAction::Shutdown));
+    m_actionCombo->addItem("Poweroff", static_cast<int>(WatchdogDevice::WatchdogAction::Poweroff));
+    m_actionCombo->addItem("Pause", static_cast<int>(WatchdogDevice::WatchdogAction::Pause));
+    m_actionCombo->addItem("None", static_cast<int>(WatchdogDevice::WatchdogAction::None));
+    m_actionCombo->addItem("Dump", static_cast<int>(WatchdogDevice::WatchdogAction::Dump));
+    m_actionCombo->addItem("Inject NMI", static_cast<int>(WatchdogDevice::WatchdogAction::InjectNMI));
+    layout->addRow("Action:", m_actionCombo);
+}
+
+Device* WatchdogDevicePage::createDevice()
+{
+    auto *watchdog = new WatchdogDevice();
+
+    watchdog->setModel(static_cast<WatchdogDevice::WatchdogModel>(m_modelCombo->currentData().toInt()));
+    watchdog->setAction(static_cast<WatchdogDevice::WatchdogAction>(m_actionCombo->currentData().toInt()));
+
+    return watchdog;
+}
+
+bool WatchdogDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// RNGDevicePage
+//=============================================================================
+
+RNGDevicePage::RNGDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void RNGDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Model
+    m_modelCombo = new QComboBox();
+    m_modelCombo->addItem("Virtio", static_cast<int>(RNGDevice::RNGModel::Virtio));
+    layout->addRow("Model:", m_modelCombo);
+
+    // Backend
+    m_backendCombo = new QComboBox();
+    m_backendCombo->addItem("Random", static_cast<int>(RNGDevice::RNGBackend::Random));
+    m_backendCombo->addItem("EGD", static_cast<int>(RNGDevice::RNGBackend::EGD));
+    layout->addRow("Backend:", m_backendCombo);
+
+    // Source path
+    m_sourcePathEdit = new QLineEdit();
+    m_sourcePathEdit->setText("/dev/urandom");
+    layout->addRow("Source Path:", m_sourcePathEdit);
+}
+
+Device* RNGDevicePage::createDevice()
+{
+    auto *rng = new RNGDevice();
+
+    rng->setModel(static_cast<RNGDevice::RNGModel>(m_modelCombo->currentData().toInt()));
+    rng->setBackend(static_cast<RNGDevice::RNGBackend>(m_backendCombo->currentData().toInt()));
+    rng->setSourcePath(m_sourcePathEdit->text());
+
+    return rng;
+}
+
+bool RNGDevicePage::validate()
+{
+    if (m_sourcePathEdit->text().isEmpty()) {
+        return false;
+    }
+    return true;
+}
+
+//=============================================================================
+// SmartcardDevicePage
+//=============================================================================
+
+SmartcardDevicePage::SmartcardDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void SmartcardDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Mode
+    m_modeCombo = new QComboBox();
+    m_modeCombo->addItem("Host", static_cast<int>(SmartcardDevice::SmartcardMode::Host));
+    m_modeCombo->addItem("Host Certificates", static_cast<int>(SmartcardDevice::SmartcardMode::HostCertificates));
+    m_modeCombo->addItem("Passthrough", static_cast<int>(SmartcardDevice::SmartcardMode::Passthrough));
+    layout->addRow("Mode:", m_modeCombo);
+
+    // Type
+    m_typeCombo = new QComboBox();
+    m_typeCombo->addItem("SpiceVMC", static_cast<int>(SmartcardDevice::SmartcardType::SpiceVMC));
+    m_typeCombo->addItem("TCP", static_cast<int>(SmartcardDevice::SmartcardType::TCP));
+    layout->addRow("Type:", m_typeCombo);
+
+    // Database
+    m_databaseEdit = new QLineEdit();
+    layout->addRow("Database:", m_databaseEdit);
+
+    // Source path
+    m_sourcePathEdit = new QLineEdit();
+    layout->addRow("Source Path:", m_sourcePathEdit);
+}
+
+Device* SmartcardDevicePage::createDevice()
+{
+    auto *smartcard = new SmartcardDevice();
+
+    smartcard->setMode(static_cast<SmartcardDevice::SmartcardMode>(m_modeCombo->currentData().toInt()));
+    smartcard->setType(static_cast<SmartcardDevice::SmartcardType>(m_typeCombo->currentData().toInt()));
+    smartcard->setDatabase(m_databaseEdit->text());
+    smartcard->setSourcePath(m_sourcePathEdit->text());
+
+    return smartcard;
+}
+
+bool SmartcardDevicePage::validate()
+{
+    auto mode = static_cast<SmartcardDevice::SmartcardMode>(m_modeCombo->currentData().toInt());
+    if (mode == SmartcardDevice::SmartcardMode::Passthrough && m_sourcePathEdit->text().isEmpty()) {
+        return false;
+    }
+    return true;
+}
+
+//=============================================================================
+// MemballoonDevicePage
+//=============================================================================
+
+MemballoonDevicePage::MemballoonDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void MemballoonDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    // Model
+    m_modelCombo = new QComboBox();
+    m_modelCombo->addItem("Virtio", static_cast<int>(MemballoonDevice::MemballoonModel::Virtio));
+    m_modelCombo->addItem("Virtio Transitional", static_cast<int>(MemballoonDevice::MemballoonModel::VirtioTraditional));
+    m_modelCombo->addItem("Virtio Non-Traditional", static_cast<int>(MemballoonDevice::MemballoonModel::VirtioNonTraditional));
+    m_modelCombo->addItem("Xen", static_cast<int>(MemballoonDevice::MemballoonModel::Xen));
+    m_modelCombo->addItem("None", static_cast<int>(MemballoonDevice::MemballoonModel::None));
+    layout->addRow("Model:", m_modelCombo);
+
+    // Autodeflate
+    m_autodeflateCheck = new QCheckBox();
+    layout->addRow("Auto Deflate:", m_autodeflateCheck);
+
+    // Deflate on OOM
+    m_deflateOnOOMCheck = new QCheckBox();
+    layout->addRow("Deflate on OOM:", m_deflateOnOOMCheck);
+
+    // Period
+    m_periodSpin = new QSpinBox();
+    m_periodSpin->setRange(0, 60);
+    m_periodSpin->setValue(5);
+    m_periodSpin->setSuffix(" seconds");
+    layout->addRow("Period:", m_periodSpin);
+}
+
+Device* MemballoonDevicePage::createDevice()
+{
+    auto *balloon = new MemballoonDevice();
+
+    balloon->setModel(static_cast<MemballoonDevice::MemballoonModel>(m_modelCombo->currentData().toInt()));
+    balloon->setAutodeflate(m_autodeflateCheck->isChecked());
+    balloon->setDeflateOnOOM(m_deflateOnOOMCheck->isChecked());
+    balloon->setPeriod(m_periodSpin->value());
+
+    return balloon;
+}
+
+bool MemballoonDevicePage::validate()
 {
     return true;
 }

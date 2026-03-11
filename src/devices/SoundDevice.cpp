@@ -10,6 +10,7 @@
  */
 
 #include "SoundDevice.h"
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -35,10 +36,23 @@ QString SoundDevice::toXML() const
 
 bool SoundDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
-    Q_UNUSED(xml);
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "sound") {
+        return false;
+    }
+
+    // Parse model attribute
+    QString modelStr = root.attribute("model");
+    if (!modelStr.isEmpty()) {
+        m_model = stringToModel(modelStr);
+    }
+
+    return true;
 }
 
 QString SoundDevice::modelToString(SoundModel model)

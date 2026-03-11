@@ -196,14 +196,17 @@ void VMListModel::setShowInactiveVMs(bool show)
 
 void VMListModel::refresh()
 {
-    beginResetModel();
     rebuildDomainList();
-    endResetModel();
 }
 
 void VMListModel::onDomainAdded(Domain *domain)
 {
     if (!domain) {
+        return;
+    }
+
+    // Check if domain is already in the list to avoid duplicates
+    if (m_domains.contains(domain)) {
         return;
     }
 

@@ -106,6 +106,7 @@ public:
 
     DeviceAddress();
     DeviceAddress(const DeviceAddress &other);
+    DeviceAddress &operator=(const DeviceAddress &other);
 
     AddressType type = AddressType::None;
 

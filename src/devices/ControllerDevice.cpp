@@ -10,6 +10,7 @@
  */
 
 #include "ControllerDevice.h"
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -66,10 +67,58 @@ QString ControllerDevice::toXML() const
 
 bool ControllerDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
-    Q_UNUSED(xml);
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "controller") {
+        return false;
+    }
+
+    // Parse type attribute
+    QString typeStr = root.attribute("type");
+    if (!typeStr.isEmpty()) {
+        m_controllerType = stringToControllerType(typeStr);
+    }
+
+    // Parse index attribute
+    QString indexStr = root.attribute("index");
+    if (!indexStr.isEmpty()) {
+        m_index = indexStr.toInt();
+    }
+
+    // Parse model attribute (for USB controllers)
+    QString modelStr = root.attribute("model");
+    if (!modelStr.isEmpty()) {
+        m_usbModel = stringToUSBModel(modelStr);
+    }
+
+    // Parse ports attribute
+    QString portsStr = root.attribute("ports");
+    if (!portsStr.isEmpty()) {
+        m_ports = portsStr.toInt();
+    }
+
+    // Parse address element
+    QDomNodeList addressNodes = root.elementsByTagName("address");
+    if (!addressNodes.isEmpty()) {
+        QDomElement addressElem = addressNodes.at(0).toElement();
+        QString addressStr = addressElem.attribute("type");
+        if (!addressStr.isEmpty()) {
+            m_address.fromString(addressStr);
+        }
+    }
+
+    // Parse alias element
+    QDomNodeList aliasNodes = root.elementsByTagName("alias");
+    if (!aliasNodes.isEmpty()) {
+        QDomElement aliasElem = aliasNodes.at(0).toElement();
+        m_alias = aliasElem.attribute("name");
+    }
+
+    return true;
 }
 
 QString ControllerDevice::controllerTypeToString(ControllerType type)

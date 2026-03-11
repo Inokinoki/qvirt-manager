@@ -11,6 +11,7 @@
 
 #include "NetworkDevice.h"
 #include <QRandomGenerator>
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -103,10 +104,111 @@ QString NetworkDevice::toXML() const
 
 bool NetworkDevice::fromXML(const QString &xml)
 {
-    // Parse XML and populate properties
-    // TODO: Implement proper XML parsing
-    Q_UNUSED(xml);
-    return false;
+    QDomDocument doc;
+    if (!doc.setContent(xml)) {
+        return false;
+    }
+
+    QDomElement root = doc.documentElement();
+    if (root.tagName() != "interface") {
+        return false;
+    }
+
+    // Parse type attribute
+    QString typeStr = root.attribute("type");
+    if (!typeStr.isEmpty()) {
+        m_networkType = stringToNetworkType(typeStr);
+    }
+
+    // Parse source element
+    QDomNodeList sourceNodes = root.elementsByTagName("source");
+    if (sourceNodes.size() > 0) {
+        QDomElement sourceElem = sourceNodes.item(0).toElement();
+
+        // Get source based on network type
+        switch (m_networkType) {
+        case NetworkType::Bridge:
+            m_source = sourceElem.attribute("bridge");
+            break;
+        case NetworkType::Network:
+            m_source = sourceElem.attribute("network");
+            break;
+        case NetworkType::Direct:
+            m_source = sourceElem.attribute("dev");
+            m_sourceMode = sourceElem.attribute("mode");
+            break;
+        default:
+            // Try common attributes
+            m_source = sourceElem.attribute("bridge");
+            if (m_source.isEmpty()) {
+                m_source = sourceElem.attribute("network");
+            }
+            if (m_source.isEmpty()) {
+                m_source = sourceElem.attribute("dev");
+            }
+            break;
+        }
+    }
+
+    // Parse MAC address
+    QDomNodeList macNodes = root.elementsByTagName("mac");
+    if (macNodes.size() > 0) {
+        QDomElement macElem = macNodes.item(0).toElement();
+        m_macAddress = macElem.attribute("address");
+    }
+
+    // Parse model
+    QDomNodeList modelNodes = root.elementsByTagName("model");
+    if (modelNodes.size() > 0) {
+        QDomElement modelElem = modelNodes.item(0).toElement();
+        QString modelStr = modelElem.attribute("type");
+        if (!modelStr.isEmpty()) {
+            m_model = stringToModelType(modelStr);
+        }
+    }
+
+    // Parse link state
+    QDomNodeList linkNodes = root.elementsByTagName("link");
+    if (linkNodes.size() > 0) {
+        QDomElement linkElem = linkNodes.item(0).toElement();
+        QString linkStateStr = linkElem.attribute("state");
+        if (!linkStateStr.isEmpty()) {
+            m_linkState = stringToLinkState(linkStateStr);
+        }
+    }
+
+    // Parse target device
+    QDomNodeList targetNodes = root.elementsByTagName("target");
+    if (targetNodes.size() > 0) {
+        QDomElement targetElem = targetNodes.item(0).toElement();
+        m_targetDev = targetElem.attribute("dev");
+    }
+
+    // Parse boot order
+    QDomNodeList bootNodes = root.elementsByTagName("boot");
+    if (bootNodes.size() > 0) {
+        QDomElement bootElem = bootNodes.item(0).toElement();
+        QString orderStr = bootElem.attribute("order");
+        if (!orderStr.isEmpty()) {
+            m_bootOrder = orderStr.toInt();
+        }
+    }
+
+    // Parse address
+    QDomNodeList addressNodes = root.elementsByTagName("address");
+    if (addressNodes.size() > 0) {
+        QDomElement addressElem = addressNodes.item(0).toElement();
+        m_address.fromString(addressElem.attribute("type"));
+    }
+
+    // Parse alias
+    QDomNodeList aliasNodes = root.elementsByTagName("alias");
+    if (aliasNodes.size() > 0) {
+        QDomElement aliasElem = aliasNodes.item(0).toElement();
+        m_alias = aliasElem.attribute("name");
+    }
+
+    return true;
 }
 
 void NetworkDevice::setSource(const QString &source)

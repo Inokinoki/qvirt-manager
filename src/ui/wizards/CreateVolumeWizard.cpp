@@ -147,7 +147,6 @@ VolumeOptionsPage::VolumeOptionsPage(QWidget *parent)
         "These options are advanced and typically not needed for standard VM disks."
     );
     infoLabel->setWordWrap(true);
-    infoLabel->setStyleSheet("QLabel { padding: 10px; }");
     layout->addWidget(infoLabel);
 
     layout->addStretch();

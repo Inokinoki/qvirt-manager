@@ -72,7 +72,6 @@ NetworkModePage::NetworkModePage(QWidget *parent)
     // Description
     m_descLabel = new QLabel();
     m_descLabel->setWordWrap(true);
-    m_descLabel->setStyleSheet("QLabel { padding: 10px; }");
     layout->addWidget(m_descLabel);
 
     connect(m_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),

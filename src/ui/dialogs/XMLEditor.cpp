@@ -262,24 +262,20 @@ void XMLEditor::validate()
 {
     if (!m_validateXML) {
         m_statusLabel->setText("Validation disabled");
-        m_statusLabel->setStyleSheet("");
         return;
     }
 
     QString xml = m_editor->toPlainText();
     if (xml.isEmpty()) {
         m_statusLabel->setText("Empty XML");
-        m_statusLabel->setStyleSheet("color: orange;");
         return;
     }
 
     if (isValidXML(xml)) {
         m_statusLabel->setText("Valid XML");
-        m_statusLabel->setStyleSheet("color: green;");
         m_btnOK->setEnabled(true);
     } else {
         m_statusLabel->setText("Invalid XML");
-        m_statusLabel->setStyleSheet("color: red;");
         m_btnOK->setEnabled(false);
     }
 }

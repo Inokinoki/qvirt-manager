@@ -12,6 +12,7 @@
 #include "Engine.h"
 #include "SystemTray.h"
 #include "../libvirt/Connection.h"
+#include "../ui/manager/ManagerWindow.h"
 #include <QApplication>
 #include <QCoreApplication>
 
@@ -23,6 +24,7 @@ Engine::Engine()
     : BaseObject(nullptr)
     , m_tickTimer(new QTimer(this))
     , m_systemTray(nullptr)
+    , m_managerWindow(nullptr)
 {
     // Setup tick timer for polling
     connect(m_tickTimer, &QTimer::timeout, this, &Engine::onTick);
@@ -64,8 +66,31 @@ void Engine::init()
 
 void Engine::showManager()
 {
-    // Emit signal to show manager window
-    // The ManagerWindow should connect to this signal
+    // Create manager window if it doesn't exist
+    if (!m_managerWindow) {
+        m_managerWindow = new ManagerWindow();
+    }
+
+    // Show the manager window
+    m_managerWindow->show();
+    m_managerWindow->raise();
+    m_managerWindow->activateWindow();
+}
+
+void Engine::registerConnection(Connection *conn)
+{
+    if (!conn) {
+        return;
+    }
+    m_connections[conn->uri()] = conn;
+}
+
+void Engine::unregisterConnection(Connection *conn)
+{
+    if (!conn) {
+        return;
+    }
+    m_connections.remove(conn->uri());
 }
 
 void Engine::onTick()
@@ -75,7 +100,7 @@ void Engine::onTick()
     for (auto *conn : m_connections) {
         if (conn) {
             // Trigger connection tick
-            // conn->tick();
+            conn->tick();
         }
     }
 }

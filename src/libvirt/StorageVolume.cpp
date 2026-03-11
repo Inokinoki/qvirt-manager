@@ -11,10 +11,25 @@
 
 #include "StorageVolume.h"
 #include "StoragePool.h"
+#include "Connection.h"
 #include "../core/Error.h"
 
 #include <QDomDocument>
 #include <QDebug>
+#include <QFile>
+#include <cstring>
+
+#ifdef LIBVIRT_FOUND
+#include <libvirt/libvirt.h>
+#include <libvirt/virterror.h>
+
+// Windows.h defines 'state' as a macro which breaks our code
+#ifdef _WIN32
+#undef state
+#endif
+
+#include <libvirt/libvirt-stream.h>
+#endif
 
 namespace QVirt {
 
@@ -121,30 +136,149 @@ bool StorageVolume::wipe(unsigned int flags)
 
 bool StorageVolume::download(const QString &path, unsigned int flags)
 {
-    Q_UNUSED(path);
-    Q_UNUSED(flags);
-
-    if (!m_volume) {
+    if (!m_volume || !m_pool) {
         return false;
     }
 
+#ifdef LIBVIRT_FOUND
+    // Get the connection from the pool
+    virConnectPtr conn = virStoragePoolGetConnect(m_pool->virPool());
+    if (!conn) {
+        return false;
+    }
+
+    // Create a stream
+    virStreamPtr stream = virStreamNew(conn, 0);
+    if (!stream) {
+        return false;
+    }
+
+    // Open the destination file
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        virStreamFree(stream);
+        return false;
+    }
+
+<<<<<<< HEAD
     // Download implementation with virStorageVolDownload requires stream management
     // This is reserved for future implementation when file download is needed
+=======
+    // Start the download from the volume
+    if (virStorageVolDownload(m_volume, stream, 0, 0, flags) < 0) {
+        file.close();
+        virStreamFree(stream);
+        return false;
+    }
+
+    // Receive data in chunks
+    char buffer[64 * 1024]; // 64KB buffer
+    bool success = true;
+
+    while (success) {
+        int bytesRead = virStreamRecv(stream, buffer, sizeof(buffer));
+        if (bytesRead < 0) {
+            success = false;
+            break;
+        }
+        if (bytesRead == 0) {
+            // End of stream
+            break;
+        }
+
+        // Write to file
+        qint64 written = file.write(buffer, bytesRead);
+        if (written != bytesRead) {
+            success = false;
+            break;
+        }
+    }
+
+    // Finish the stream
+    if (virStreamFinish(stream) < 0) {
+        success = false;
+    }
+
+    file.close();
+    virStreamFree(stream);
+
+    return success;
+#else
+    Q_UNUSED(flags);
+>>>>>>> e09859117d53447bb3ade2a46a64b91f3615b34d
     return false;
+#endif
 }
 
 bool StorageVolume::upload(const QString &path, unsigned int flags)
 {
-    Q_UNUSED(path);
-    Q_UNUSED(flags);
-
-    if (!m_volume) {
+    if (!m_volume || !m_pool) {
         return false;
     }
 
-    // Upload implementation with virStorageVolUpload requires stream management
-    // This is reserved for future implementation when file upload is needed
+#ifdef LIBVIRT_FOUND
+    // Get the connection from the pool
+    virConnectPtr conn = virStoragePoolGetConnect(m_pool->virPool());
+    if (!conn) {
+        return false;
+    }
+
+    // Open the source file
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+
+    // Create a stream
+    virStreamPtr stream = virStreamNew(conn, 0);
+    if (!stream) {
+        file.close();
+        return false;
+    }
+
+    // Start the download from the volume
+    if (virStorageVolDownload(m_volume, stream, 0, 0, flags) < 0) {
+        file.close();
+        virStreamFree(stream);
+        return false;
+    }
+
+    // Receive data in chunks
+    char buffer[64 * 1024]; // 64KB buffer
+    bool success = true;
+
+    while (success) {
+        int bytesRead = virStreamRecv(stream, buffer, sizeof(buffer));
+        if (bytesRead < 0) {
+            success = false;
+            break;
+        }
+        if (bytesRead == 0) {
+            // End of stream
+            break;
+        }
+
+        // Write to file
+        qint64 written = file.write(buffer, bytesRead);
+        if (written != bytesRead) {
+            success = false;
+            break;
+        }
+    }
+
+    // Finish the stream
+    if (virStreamFinish(stream) < 0) {
+        success = false;
+    }
+
+    file.close();
+    virStreamFree(stream);
+
+    return success;
+#else
+    Q_UNUSED(flags);
     return false;
+#endif
 }
 
 StorageVolume *StorageVolume::clone(const QString &name, unsigned int flags)

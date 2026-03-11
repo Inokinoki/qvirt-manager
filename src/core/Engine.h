@@ -21,6 +21,7 @@ namespace QVirt {
 
 class Connection;
 class SystemTray;
+class ManagerWindow;
 
 /**
  * @brief Main application engine (singleton)
@@ -60,6 +61,18 @@ public:
      */
     SystemTray *systemTray() const { return m_systemTray; }
 
+    /**
+     * @brief Register a connection with the engine
+     * @param conn Connection to register
+     */
+    void registerConnection(Connection *conn);
+
+    /**
+     * @brief Unregister a connection from the engine
+     * @param conn Connection to unregister
+     */
+    void unregisterConnection(Connection *conn);
+
 signals:
     /**
      * @brief Emitted when the application is closing
@@ -83,6 +96,7 @@ private:
     QTimer *m_tickTimer;
     QMap<QString, Connection *> m_connections;
     SystemTray *m_systemTray;
+    ManagerWindow *m_managerWindow;
 };
 
 } // namespace QVirt

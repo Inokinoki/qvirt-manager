@@ -17,12 +17,27 @@
 #include <QPixmap>
 #include <QList>
 
+#ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
 
 // Windows.h defines 'state' as a macro which breaks our code
 #ifdef _WIN32
 #undef state
 #endif
+#else
+// Forward declarations for when libvirt is not available
+typedef void *virDomainPtr;
+
+// Define libvirt constants when libvirt is not available
+#define VIR_DOMAIN_NOSTATE 0
+#define VIR_DOMAIN_RUNNING 1
+#define VIR_DOMAIN_BLOCKED 2
+#define VIR_DOMAIN_PAUSED 3
+#define VIR_DOMAIN_SHUTDOWN 4
+#define VIR_DOMAIN_SHUTOFF 5
+#define VIR_DOMAIN_CRASHED 6
+#define VIR_DOMAIN_PMSUSPENDED 7
+#endif // LIBVIRT_FOUND
 
 namespace QVirt {
 
@@ -77,6 +92,11 @@ public:
     // Configuration
     QString getXMLDesc(unsigned int flags = 0) const;
     bool setXML(const QString &xml, unsigned int flags = 0);
+
+    // Device manipulation
+    bool attachDevice(const QString &xml);
+    bool detachDevice(const QString &xml);
+    bool updateDevice(const QString &xml);
 
     // Resources
     quint64 maxMemory() const;  // in KB

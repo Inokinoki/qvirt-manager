@@ -19,6 +19,10 @@ if(LIBVIRT_FOUND)
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
     )
+    target_compile_definitions(qvirt-core
+        PUBLIC
+            LIBVIRT_FOUND
+    )
 endif()
 
 target_link_libraries(qvirt-core
@@ -30,23 +34,29 @@ target_link_libraries(qvirt-core
 
 if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-core
-        PUBLIC
+        PRIVATE
             ${LIBVIRT_LIBRARIES}
     )
 endif()
 
 # Libvirt wrappers
-add_library(qvirt-libvirt
-    libvirt/Connection.cpp
-    libvirt/Domain.cpp
-    libvirt/DomainSnapshot.cpp
-    libvirt/Network.cpp
-    libvirt/StoragePool.cpp
-    libvirt/StorageVolume.cpp
-    libvirt/NodeDevice.cpp
-    libvirt/EnumMapper.cpp
-    libvirt/Guest.cpp
-)
+# Only add libvirt sources when libvirt is found
+if(LIBVIRT_FOUND)
+    add_library(qvirt-libvirt
+        libvirt/Connection.cpp
+        libvirt/Domain.cpp
+        libvirt/DomainSnapshot.cpp
+        libvirt/Network.cpp
+        libvirt/StoragePool.cpp
+        libvirt/StorageVolume.cpp
+        libvirt/NodeDevice.cpp
+        libvirt/EnumMapper.cpp
+        libvirt/Guest.cpp
+    )
+else()
+    # Create empty library when libvirt is not found
+    add_library(qvirt-libvirt STATIC)
+endif()
 
 target_include_directories(qvirt-libvirt
     PUBLIC
@@ -71,8 +81,12 @@ target_link_libraries(qvirt-libvirt
 
 if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-libvirt
-        PUBLIC
+        PRIVATE
             ${LIBVIRT_LIBRARIES}
+    )
+    target_compile_definitions(qvirt-libvirt
+        PUBLIC
+            LIBVIRT_FOUND
     )
 endif()
 
@@ -95,6 +109,17 @@ target_link_libraries(qvirt-console
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::Gui
 )
+
+if(LIBVIRT_FOUND)
+    target_link_libraries(qvirt-libvirt
+        PRIVATE
+            ${LIBVIRT_LIBRARIES}
+    )
+    target_compile_definitions(qvirt-libvirt
+        PUBLIC
+            LIBVIRT_FOUND
+    )
+endif()
 
 # Device library
 add_library(qvirt-devices
@@ -125,6 +150,7 @@ target_link_libraries(qvirt-devices
         qvirt-core
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 # UI components
@@ -166,6 +192,10 @@ if(LIBVIRT_FOUND)
         PUBLIC
             ${LIBVIRT_INCLUDE_DIRS}
     )
+    target_compile_definitions(qvirt-ui
+        PUBLIC
+            LIBVIRT_FOUND
+    )
 endif()
 
 target_link_libraries(qvirt-ui
@@ -205,11 +235,9 @@ if(LIBVIRT_FOUND)
     )
 endif()
 
+# Note: qvirt-ui transitively links qvirt-libvirt and qvirt-core, which bring in qvirt-devices
 target_link_libraries(qvirt-manager
     PRIVATE
-        qvirt-core
-        qvirt-libvirt
-        qvirt-devices
         qvirt-ui
         # Explicitly link Qt libraries to ensure proper symbol resolution on all platforms
         Qt${QT_VERSION_MAJOR}::Core

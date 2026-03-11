@@ -17,6 +17,63 @@
 #include "../core/Error.h"
 #include <QDebug>
 
+#ifdef LIBVIRT_FOUND
+#include <libvirt/libvirt.h>
+
+// Windows.h defines 'state' as a macro which breaks our code
+#ifdef _WIN32
+#undef state
+#endif
+
+// Auth callback data structure
+struct ConnectionAuthData {
+    QString password;
+    QString sshKeyPath;
+};
+
+// Libvirt auth callback function
+static int virConnectAuthCallback(virConnectCredentialPtr cred, unsigned int ncred, void *cbdata)
+{
+    auto *authData = static_cast<ConnectionAuthData *>(cbdata);
+
+    for (unsigned int i = 0; i < ncred; ++i) {
+        if (cred[i].type == VIR_CRED_PASSPHRASE || cred[i].type == VIR_CRED_NOECHOPROMPT) {
+            // Use provided password if available
+            if (!authData->password.isEmpty()) {
+                cred[i].result = strdup(authData->password.toUtf8().constData());
+                if (!cred[i].result) {
+                    return -1;
+                }
+                cred[i].resultlen = strlen(cred[i].result);
+            } else {
+                // No password provided, request it
+                return -1;
+            }
+        } else if (cred[i].type == VIR_CRED_EXTERNAL) {
+            // External auth method (e.g., SSH agent)
+            if (cred[i].prompt && strcmp(cred[i].prompt, "Auth Name") == 0) {
+                // For SSH key auth, we can set the SSH_AUTH_SOCK environment variable
+                // or the user can configure it in ~/.ssh/config
+                // The sshKeyPath would typically be used via SSH config
+                continue;
+            }
+        } else {
+            // Unsupported credential type
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// Auth callback struct for libvirt
+static virConnectAuth authHelper = {
+    .cb = virConnectAuthCallback,
+    .cbdata = nullptr,
+    .credtype = nullptr,
+    .ncredtype = 0
+};
+#endif
+
 namespace QVirt {
 
 Connection::Connection(const QString &uri)
@@ -27,7 +84,7 @@ Connection::Connection(const QString &uri)
     , m_tickCounter(0)
     , m_initialPoll(true)
 {
-    // Attempt to open the connection
+    // Attempt to open the connection (no auth)
     m_conn = virConnectOpen(uri.toUtf8().constData());
 
     if (m_conn) {
@@ -41,14 +98,80 @@ Connection::Connection(const QString &uri)
     }
 }
 
+Connection::Connection(const QString &uri, const QString &sshKeyPath, const QString &password)
+    : BaseObject()
+    , m_uri(uri)
+    , m_state(Disconnected)
+    , m_conn(nullptr)
+    , m_tickCounter(0)
+    , m_initialPoll(true)
+    , m_sshKeyPath(sshKeyPath)
+{
+#ifdef LIBVIRT_FOUND
+    // Set up authentication data
+    ConnectionAuthData authData;
+    authData.password = password;
+    authData.sshKeyPath = sshKeyPath;
+
+    // For SSH key authentication, we can set the environment variable
+    // or rely on SSH config. The user should configure SSH config properly.
+    if (!sshKeyPath.isEmpty()) {
+        qputenv("LIBVIRT_SSH_KEY_PATH", sshKeyPath.toUtf8());
+    }
+
+    // Extract username from URI for persistence
+    // URI format: qemu+ssh://[username@]hostname[:port]/system
+    QString uriCopy = uri;
+    if (uriCopy.contains("://")) {
+        QString authPart = uriCopy.split("://")[1];
+        authPart = authPart.split("/")[0]; // Remove /system part
+        if (authPart.contains("@")) {
+            m_sshUsername = authPart.split("@")[0];
+        }
+    }
+
+    // Attempt to open the connection with auth
+    authHelper.cbdata = &authData;
+    m_conn = virConnectOpenAuth(uri.toUtf8().constData(), &authHelper, 0);
+
+    if (m_conn) {
+        m_state = Active;
+        emit stateChanged(m_state);
+        qDebug() << "Connected to" << m_uri << "with authentication";
+    } else {
+        m_state = Disconnected;
+        emit stateChanged(m_state);
+        qWarning() << "Failed to connect to" << m_uri << "with authentication";
+    }
+
+    // Clear environment variable
+    if (!sshKeyPath.isEmpty()) {
+        qunsetenv("LIBVIRT_SSH_KEY_PATH");
+    }
+#else
+    // No libvirt support
+    m_state = Disconnected;
+    emit stateChanged(m_state);
+#endif
+}
+
 Connection::~Connection()
 {
     close();
 }
 
-Connection *Connection::open(const QString &uri)
+Connection *Connection::open(const QString &uri, const QString &sshKeyPath, const QString &password)
 {
-    auto *conn = new Connection(uri);
+    Connection *conn = nullptr;
+
+    // If no credentials provided, use simple connection (for local or SSH agent auth)
+    if (sshKeyPath.isEmpty() && password.isEmpty()) {
+        conn = new Connection(uri);
+    } else {
+        // Use authenticated connection
+        conn = new Connection(uri, sshKeyPath, password);
+    }
+
     if (!conn->isOpen()) {
         delete conn;
         return nullptr;
@@ -441,16 +564,144 @@ void Connection::pollDomains()
 
 void Connection::pollNetworks()
 {
-    // Similar to pollDomains but for networks
-    // For now, just log
-    qDebug() << "Polling networks for" << m_uri;
+    // Check for new or removed networks
+    int numNetworks = virConnectNumOfNetworks(m_conn);
+    int numInactiveNetworks = virConnectNumOfDefinedNetworks(m_conn);
+
+    QSet<QString> currentNetworkNames;
+
+    // Check active networks
+    if (numNetworks > 0) {
+        char **networkNames = new char *[numNetworks];
+        int actualNetworks = virConnectListNetworks(m_conn, networkNames, numNetworks);
+        if (actualNetworks >= 0) {
+            for (int i = 0; i < actualNetworks; i++) {
+                QString networkName = QString::fromUtf8(networkNames[i]);
+                currentNetworkNames.insert(networkName);
+
+                if (!m_networks.contains(networkName)) {
+                    virNetworkPtr networkPtr = virNetworkLookupByName(m_conn, networkNames[i]);
+                    if (networkPtr) {
+                        auto *network = new Network(this, networkPtr);
+                        m_networks[networkName] = network;
+                        emit networkAdded(network);
+                    }
+                }
+                free(networkNames[i]);
+            }
+        }
+        delete[] networkNames;
+    }
+
+    // Check inactive networks
+    if (numInactiveNetworks > 0) {
+        char **networkNames = new char *[numInactiveNetworks];
+        int actualNetworks = virConnectListDefinedNetworks(m_conn, networkNames, numInactiveNetworks);
+        if (actualNetworks >= 0) {
+            for (int i = 0; i < actualNetworks; i++) {
+                QString networkName = QString::fromUtf8(networkNames[i]);
+                currentNetworkNames.insert(networkName);
+
+                if (!m_networks.contains(networkName)) {
+                    virNetworkPtr networkPtr = virNetworkLookupByName(m_conn, networkNames[i]);
+                    if (networkPtr) {
+                        auto *network = new Network(this, networkPtr);
+                        m_networks[networkName] = network;
+                        emit networkAdded(network);
+                    }
+                }
+                free(networkNames[i]);
+            }
+        }
+        delete[] networkNames;
+    }
+
+    // Check for removed networks
+    QStringList removedNetworks;
+    for (auto it = m_networks.begin(); it != m_networks.end(); ++it) {
+        if (!currentNetworkNames.contains(it.key())) {
+            removedNetworks.append(it.key());
+        }
+    }
+
+    for (const QString &name : removedNetworks) {
+        Network *network = m_networks.take(name);
+        if (network) {
+            emit networkRemoved(network);
+            delete network;
+        }
+    }
 }
 
 void Connection::pollStoragePools()
 {
-    // Similar to pollDomains but for storage pools
-    // For now, just log
-    qDebug() << "Polling storage pools for" << m_uri;
+    // Check for new or removed storage pools
+    int numPools = virConnectNumOfStoragePools(m_conn);
+    int numInactivePools = virConnectNumOfDefinedStoragePools(m_conn);
+
+    QSet<QString> currentPoolNames;
+
+    // Check active pools
+    if (numPools > 0) {
+        char **poolNames = new char *[numPools];
+        int actualPools = virConnectListStoragePools(m_conn, poolNames, numPools);
+        if (actualPools >= 0) {
+            for (int i = 0; i < actualPools; i++) {
+                QString poolName = QString::fromUtf8(poolNames[i]);
+                currentPoolNames.insert(poolName);
+
+                if (!m_storagePools.contains(poolName)) {
+                    virStoragePoolPtr poolPtr = virStoragePoolLookupByName(m_conn, poolNames[i]);
+                    if (poolPtr) {
+                        auto *pool = new StoragePool(this, poolPtr);
+                        m_storagePools[poolName] = pool;
+                        emit storagePoolAdded(pool);
+                    }
+                }
+                free(poolNames[i]);
+            }
+        }
+        delete[] poolNames;
+    }
+
+    // Check inactive pools
+    if (numInactivePools > 0) {
+        char **poolNames = new char *[numInactivePools];
+        int actualPools = virConnectListDefinedStoragePools(m_conn, poolNames, numInactivePools);
+        if (actualPools >= 0) {
+            for (int i = 0; i < actualPools; i++) {
+                QString poolName = QString::fromUtf8(poolNames[i]);
+                currentPoolNames.insert(poolName);
+
+                if (!m_storagePools.contains(poolName)) {
+                    virStoragePoolPtr poolPtr = virStoragePoolLookupByName(m_conn, poolNames[i]);
+                    if (poolPtr) {
+                        auto *pool = new StoragePool(this, poolPtr);
+                        m_storagePools[poolName] = pool;
+                        emit storagePoolAdded(pool);
+                    }
+                }
+                free(poolNames[i]);
+            }
+        }
+        delete[] poolNames;
+    }
+
+    // Check for removed pools
+    QStringList removedPools;
+    for (auto it = m_storagePools.begin(); it != m_storagePools.end(); ++it) {
+        if (!currentPoolNames.contains(it.key())) {
+            removedPools.append(it.key());
+        }
+    }
+
+    for (const QString &name : removedPools) {
+        StoragePool *pool = m_storagePools.take(name);
+        if (pool) {
+            emit storagePoolRemoved(pool);
+            delete pool;
+        }
+    }
 }
 
 } // namespace QVirt

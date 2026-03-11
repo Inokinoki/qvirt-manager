@@ -18,6 +18,8 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QFormLayout>
+#include <QStandardItemModel>
+#include <QItemSelectionModel>
 
 namespace QVirt {
 
@@ -120,7 +122,38 @@ void SnapshotDialog::updateSnapshotList()
     // Get list of snapshots from domain
     QList<DomainSnapshot*> snapshots = m_domain->snapshots();
 
-    // Update snapshot info with count
+    // Create table model
+    auto *model = new QStandardItemModel(this);
+    model->setHorizontalHeaderLabels({"Name", "Description", "State", "Creation Time"});
+
+    for (DomainSnapshot *snapshot : snapshots) {
+        if (!snapshot) {
+            continue;
+        }
+
+        QList<QStandardItem*> row;
+
+        // Name
+        row.append(new QStandardItem(snapshot->name()));
+
+        // Description (truncate if too long)
+        QString desc = snapshot->description();
+        if (desc.length() > 50) {
+            desc = desc.left(47) + "...";
+        }
+        row.append(new QStandardItem(desc));
+
+        // State
+        row.append(new QStandardItem(EnumMapper::stateToString(snapshot->state())));
+
+        // Creation Time
+        row.append(new QStandardItem(snapshot->creationTime().toString("yyyy-MM-dd hh:mm:ss")));
+
+        model->appendRow(row);
+    }
+
+    m_snapshotList->setModel(model);
+    m_snapshotList->resizeColumnsToContents();
     m_snapshotInfoLabel->setText(QString("Found %1 snapshot(s)").arg(snapshots.size()));
 }
 
@@ -147,12 +180,29 @@ void SnapshotDialog::updateSnapshotInfo()
 void SnapshotDialog::onSnapshotSelected()
 {
     // Get selected snapshot from table
-    // Current implementation: use first snapshot from domain
-    // Future enhancement: implement proper table selection model
+    QItemSelectionModel *selectionModel = m_snapshotList->selectionModel();
+    if (!selectionModel) {
+        return;
+    }
+
+    QModelIndexList selectedIndexes = selectionModel->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        return;
+    }
+
+    // Get the snapshot name from the first column of the selected row
+    QModelIndex index = selectedIndexes.first();
+    QAbstractItemModel *model = m_snapshotList->model();
+    QString snapshotName = model->data(model->index(index.row(), 0)).toString();
+
+    // Find the snapshot by name
     QList<DomainSnapshot*> snapshots = m_domain->snapshots();
-    if (!snapshots.isEmpty()) {
-        m_currentSnapshot = snapshots.first();
-        updateSnapshotInfo();
+    for (DomainSnapshot *snapshot : snapshots) {
+        if (snapshot && snapshot->name() == snapshotName) {
+            m_currentSnapshot = snapshot;
+            updateSnapshotInfo();
+            break;
+        }
     }
 }
 
@@ -198,24 +248,12 @@ void SnapshotDialog::revertSnapshot()
         return;
     }
 
-    // Confirm revert operation
-    auto reply = QMessageBox::question(this, "Revert Snapshot",
-        QString("Are you sure you want to revert to snapshot '%1'?\n\n"
-                "The VM will be restored to the state it was in when this snapshot was taken.").arg(m_currentSnapshot->name()),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (reply != QMessageBox::Yes) {
-        return;
-    }
-
-    // Revert to snapshot
-    if (m_currentSnapshot->revert(0)) {
-        QMessageBox::information(this, "Success",
-            QString("Successfully reverted to snapshot '%1'.").arg(m_currentSnapshot->name()));
+    if (m_currentSnapshot->revert()) {
+        QMessageBox::information(this, "Revert Snapshot",
+            QString("Successfully reverted to snapshot '%1'").arg(m_currentSnapshot->name()));
     } else {
-        QMessageBox::critical(this, "Error",
-            QString("Failed to revert to snapshot '%1'.").arg(m_currentSnapshot->name()));
+        QMessageBox::warning(this, "Revert Failed",
+            QString("Failed to revert to snapshot '%1'").arg(m_currentSnapshot->name()));
     }
 
     updateSnapshotList();
@@ -242,14 +280,13 @@ void SnapshotDialog::deleteSnapshot()
         return;
     }
 
-    // Delete snapshot (metadata and children)
-    if (m_currentSnapshot->delete_(0)) {
-        QMessageBox::information(this, "Success",
-            QString("Successfully deleted snapshot '%1'.").arg(m_currentSnapshot->name()));
+    if (m_currentSnapshot->delete_()) {
+        QMessageBox::information(this, "Delete Snapshot",
+            QString("Successfully deleted snapshot '%1'").arg(m_currentSnapshot->name()));
         m_currentSnapshot = nullptr;
     } else {
-        QMessageBox::critical(this, "Error",
-            QString("Failed to delete snapshot '%1'.").arg(m_currentSnapshot->name()));
+        QMessageBox::warning(this, "Delete Failed",
+            QString("Failed to delete snapshot '%1'").arg(m_currentSnapshot->name()));
     }
 
     updateSnapshotList();

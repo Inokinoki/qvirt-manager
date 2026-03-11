@@ -6,17 +6,25 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * (at your option) any later version).
  */
 
 #include "HostDialog.h"
 #include "../../libvirt/NodeDevice.h"
-#include "../../core/Error.h"
+#include "../../libvirt/Domain.h"
+#include "../../libvirt/Network.h"
 
 #include <QMessageBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QXmlStreamReader>
+#include <QDebug>
+#include <QStandardItemModel>
+
+#ifdef LIBVIRT_FOUND
+#include <libvirt/libvirt.h>
+#endif
 
 namespace QVirt {
 
@@ -197,87 +205,260 @@ void HostDialog::refresh()
 
 void HostDialog::updateInfo()
 {
-    // Get connection info
+    if (!m_connection || !m_connection->isOpen()) {
+        m_hostnameLabel->setText("Not connected");
+        m_hypervisorLabel->setText("N/A");
+        m_versionLabel->setText("N/A");
+        m_archLabel->setText("N/A");
+        m_cpusLabel->setText("N/A");
+        m_threadsLabel->setText("N/A");
+        m_clockSpeedLabel->setText("N/A");
+        m_modelLabel->setText("N/A");
+        m_memoryLabel->setText("N/A");
+        m_capsLabel->setText("Unable to retrieve host information");
+        m_xmlCaps->setPlainText("");
+        return;
+    }
+
+    // Get hostname
+    QString hostname = m_connection->hostname();
+    m_hostnameLabel->setText(hostname.isEmpty() ? "Unknown" : hostname);
+
+    // Get hypervisor type from URI
     QString uri = m_connection->uri();
-    m_hostnameLabel->setText(uri);
+    QString hypervisor = "Unknown";
+    if (uri.startsWith("qemu")) {
+        hypervisor = "QEMU/KVM";
+    } else if (uri.startsWith("xen")) {
+        hypervisor = "Xen";
+    } else if (uri.startsWith("vmware")) {
+        hypervisor = "VMware";
+    } else if (uri.startsWith("virtualbox")) {
+        hypervisor = "VirtualBox";
+    }
+    m_hypervisorLabel->setText(hypervisor);
 
-    // Hypervisor info
-    m_hypervisorLabel->setText("QEMU/KVM");
-
-    // Get capabilities
-    // In a real implementation, we'd parse virConnectGetCapabilities()
+    // Get libvirt version
     m_versionLabel->setText(m_connection->libvirtVersion());
 
-    // Architecture
-    m_archLabel->setText("x86_64");
+    // Get capabilities XML
+    QString capsXml = m_connection->capabilities();
+    if (capsXml.isEmpty()) {
+        m_archLabel->setText("N/A");
+        m_cpusLabel->setText("N/A");
+        m_memoryLabel->setText("N/A");
+        m_capsLabel->setText("Unable to retrieve capabilities");
+        m_xmlCaps->setPlainText("");
+        return;
+    }
 
-    // CPU info (from /proc/cpuinfo in real implementation)
-    m_cpusLabel->setText("N/A");
-    m_threadsLabel->setText("N/A");
-    m_clockSpeedLabel->setText("N/A");
-    m_modelLabel->setText("N/A");
+    // Parse capabilities XML with proper structure handling
+    QString arch;
+    QString cpuModel;
+    int cpuCount = 0;
+    int threads = 0;
+    ulong memoryKB = 0;
+    QStringList features;
+    double cpuMhz = 0.0;
 
-    // Memory
-    m_memoryLabel->setText("N/A");
+    QXmlStreamReader xml(capsXml);
+    bool inHost = false;
+    bool inHostCPU = false;
+    bool inCell = false;
 
-    // Capabilities
-    m_capsLabel->setText("This hypervisor supports:\n"
-        "• Virtualization (VT-x/AMD-V)\n"
-        "• Nested virtualization\n"
-        "• Various disk formats\n"
-        "• Network interfaces\n"
-        "• USB devices\n"
-        "• PCI passthrough");
+    while (!xml.atEnd() && !xml.hasError()) {
+        QXmlStreamReader::TokenType token = xml.readNext();
+        if (token == QXmlStreamReader::StartElement) {
+            QString name = xml.name().toString();
 
-    // Show XML capabilities (simplified)
-    m_xmlCaps->setPlainText("<capabilities>\n"
-        "  <host>\n"
-        "    <cpu>\n"
-        "      <arch>x86_64</arch>\n"
-        "      <features/>\n"
-        "    </cpu>\n"
-        "  </host>\n"
-        "\n"
-        "  <guest>\n"
-        "    <os_type>hvm</os_type>\n"
-        "    <arch name='x86_64'/>\n"
-        "  </guest>\n"
-        "</capabilities>");
+            // Track if we're in the <host> section
+            if (name == QLatin1String("host")) {
+                inHost = true;
+            }
+            // Track if we're in the host <cpu> section
+            else if (name == QLatin1String("cpu") && inHost) {
+                inHostCPU = true;
+            }
+            // Track if we're in a <cell> element
+            else if (name == QLatin1String("cell") && inHost) {
+                inCell = true;
+            }
+            // Parse architecture from <host><cpu><arch>
+            else if (name == QLatin1String("arch") && inHostCPU) {
+                arch = xml.readElementText();
+            }
+            // Parse CPU model from <host><cpu><model>
+            else if (name == QLatin1String("model") && inHostCPU) {
+                cpuModel = xml.readElementText();
+            }
+            // Parse CPU topology (sockets, cores, threads)
+            else if (name == QLatin1String("topology") && inHostCPU) {
+                QString sockets = xml.attributes().value("sockets").toString();
+                QString cores = xml.attributes().value("cores").toString();
+                QString threadsAttr = xml.attributes().value("threads").toString();
+                if (!sockets.isEmpty() && !cores.isEmpty() && !threadsAttr.isEmpty()) {
+                    cpuCount = sockets.toInt() * cores.toInt() * threadsAttr.toInt();
+                    threads = threadsAttr.toInt();
+                }
+            }
+            // Parse clock speed from TSC counter
+            else if (name == QLatin1String("counter") && inHostCPU) {
+                QString counterName = xml.attributes().value("name").toString();
+                if (counterName == QLatin1String("tsc")) {
+                    QString freqAttr = xml.attributes().value("frequency").toString();
+                    if (!freqAttr.isEmpty()) {
+                        cpuMhz = freqAttr.toDouble() / 1000000.0; // Convert Hz to MHz
+                    }
+                }
+            }
+            // Parse memory from <cell><memory>
+            else if (name == QLatin1String("memory") && inCell) {
+                QString memText = xml.readElementText();
+                bool ok;
+                ulong mem = memText.toULong(&ok);
+                if (ok && mem > 0) {
+                    memoryKB = mem;
+                }
+            }
+            // Parse CPU features
+            else if (name == QLatin1String("feature") && inHostCPU) {
+                QString featureName = xml.attributes().value("name").toString();
+                if (!featureName.isEmpty()) {
+                    features.append(featureName);
+                }
+            }
+        } else if (token == QXmlStreamReader::EndElement) {
+            QString name = xml.name().toString();
+            if (name == QLatin1String("host")) {
+                inHost = false;
+            } else if (name == QLatin1String("cpu")) {
+                inHostCPU = false;
+            } else if (name == QLatin1String("cell")) {
+                inCell = false;
+            }
+        }
+    }
+
+    m_archLabel->setText(arch.isEmpty() ? "x86_64" : arch);
+    m_modelLabel->setText(cpuModel.isEmpty() ? "Unknown" : cpuModel);
+    m_cpusLabel->setText(cpuCount > 0 ? QString::number(cpuCount) : "N/A");
+    m_threadsLabel->setText(threads > 0 ? QString::number(threads) : "N/A");
+
+    // Format memory
+    if (memoryKB > 0) {
+        double memoryGB = memoryKB / 1024.0 / 1024.0;
+        m_memoryLabel->setText(QString("%1 GB").arg(memoryGB, 0, 'f', 2));
+    } else {
+        m_memoryLabel->setText("N/A");
+    }
+
+    // Format clock speed
+    if (cpuMhz > 0) {
+        if (cpuMhz >= 1000) {
+            m_clockSpeedLabel->setText(QString("%1 GHz").arg(cpuMhz / 1000.0, 0, 'f', 2));
+        } else {
+            m_clockSpeedLabel->setText(QString("%1 MHz").arg(cpuMhz, 0, 'f', 0));
+        }
+    } else {
+        m_clockSpeedLabel->setText("N/A");
+    }
+
+    // Build capabilities text
+    QString capsText;
+    if (!features.isEmpty()) {
+        capsText = "CPU Features:\n";
+        for (const QString &feature : features) {
+            capsText += "• " + feature + "\n";
+        }
+    }
+
+    if (!capsText.isEmpty()) {
+        m_capsLabel->setText(capsText);
+    } else {
+        m_capsLabel->setText("No specific capabilities listed");
+    }
+
+    // Show full XML (truncated for display)
+    m_xmlCaps->setPlainText(capsXml.left(5000) + (capsXml.length() > 5000 ? "\n... (truncated)" : ""));
 }
 
 void HostDialog::updatePerformance()
 {
-    // In a real implementation, this would get actual stats
-    // For now, show placeholder values
+    if (!m_connection || !m_connection->isOpen()) {
+        m_cpuUsageBar->setValue(0);
+        m_memoryUsageBar->setValue(0);
+        m_runningVMsLabel->setText("N/A");
+        m_totalVMsLabel->setText("N/A");
+        m_activeInterfacesLabel->setText("N/A");
+        m_totalInterfacesLabel->setText("N/A");
+        return;
+    }
 
-    m_cpuUsageBar->setValue(25);
-    m_cpuUsageBar->setFormat("25%");
+    // Note: Real-time CPU and memory usage stats require more complex querying
+    // For now, set to 0 as placeholder
+    m_cpuUsageBar->setValue(0);
+    m_memoryUsageBar->setValue(0);
 
-    m_memoryUsageBar->setValue(60);
-    m_memoryUsageBar->setFormat("60%");
+    // Get VM counts
+    QList<Domain*> domains = m_connection->domains();
+    int runningVMs = 0;
+    for (Domain *domain : domains) {
+        if (domain && domain->state() == Domain::StateRunning) {
+            runningVMs++;
+        }
+    }
+    m_runningVMsLabel->setText(QString::number(runningVMs));
+    m_totalVMsLabel->setText(QString::number(domains.count()));
 
-    // Count VMs (would use connection's domain list)
-    m_runningVMsLabel->setText("N/A");
-    m_totalVMsLabel->setText("N/A");
-
-    m_activeInterfacesLabel->setText("N/A");
-    m_totalInterfacesLabel->setText("N/A");
+    // Get network counts
+    QList<Network*> networks = m_connection->networks();
+    int activeNetworks = 0;
+    for (Network *network : networks) {
+        if (network && network->isActive()) {
+            activeNetworks++;
+        }
+    }
+    m_activeInterfacesLabel->setText(QString::number(activeNetworks));
+    m_totalInterfacesLabel->setText(QString::number(networks.count()));
 }
 
 void HostDialog::updateDevices()
 {
-    // In a real implementation, populate table with node devices
-    // For now, just show empty table with headers
     m_devicesTable->setModel(nullptr);
+
+    if (!m_connection || !m_connection->isOpen()) {
+        return;
+    }
+
+    // Get node devices
+    QList<NodeDevice*> devices = m_connection->nodeDevices();
+
+    if (devices.isEmpty()) {
+        return;
+    }
+
+    // Create a simple table model
+    auto *model = new QStandardItemModel(this);
+    model->setHorizontalHeaderLabels({"Name"});
+
+    for (NodeDevice *device : devices) {
+        if (!device) {
+            continue;
+        }
+
+        QList<QStandardItem*> row;
+        row.append(new QStandardItem(device->name()));
+
+        model->appendRow(row);
+    }
+
+    m_devicesTable->setModel(model);
+    m_devicesTable->resizeColumnsToContents();
 }
 
 void HostDialog::onRefresh()
 {
     refresh();
-    QMessageBox::information(this, "Refreshed",
-        "Host information has been refreshed.\n\n"
-        "Note: Actual host statistics will be displayed when connected\n"
-        "to a running libvirtd instance.");
 }
 
 } // namespace QVirt

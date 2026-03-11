@@ -16,6 +16,7 @@
 #include <QString>
 #include <QDateTime>
 
+#ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
 
 // Windows.h defines 'state' as a macro which breaks our code
@@ -24,6 +25,9 @@
 #endif
 
 typedef struct _virDomainSnapshot virDomainSnapshot;
+#else
+typedef void *virDomainSnapshotPtr;
+#endif // LIBVIRT_FOUND
 
 namespace QVirt {
 

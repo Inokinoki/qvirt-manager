@@ -53,6 +53,20 @@ QStringList Config::connectionURIs() const
     return m_settings.value("Connections/uris", QStringList()).toStringList();
 }
 
+ConnectionInfo Config::connectionInfo(const QString &uri) const
+{
+    ConnectionInfo info(uri);
+    info.autoconnect = connAutoconnect(uri);
+    info.sshKeyPath = connSSHKeyPath(uri);
+    info.sshUsername = connSSHUsername(uri);
+    return info;
+}
+
+bool Config::hasConnection(const QString &uri) const
+{
+    return connectionURIs().contains(uri);
+}
+
 void Config::setConnAutoconnect(const QString &uri, bool autoconnect)
 {
     m_settings.setValue(QString("Connection/%1/autoconnect").arg(uri), autoconnect);
@@ -62,6 +76,28 @@ void Config::setConnAutoconnect(const QString &uri, bool autoconnect)
 bool Config::connAutoconnect(const QString &uri) const
 {
     return m_settings.value(QString("Connection/%1/autoconnect").arg(uri), false).toBool();
+}
+
+void Config::setConnSSHKeyPath(const QString &uri, const QString &keyPath)
+{
+    m_settings.setValue(QString("Connection/%1/sshKeyPath").arg(uri), keyPath);
+    emit valueChanged(QString("Connection/%1/sshKeyPath").arg(uri));
+}
+
+QString Config::connSSHKeyPath(const QString &uri) const
+{
+    return m_settings.value(QString("Connection/%1/sshKeyPath").arg(uri), QString()).toString();
+}
+
+void Config::setConnSSHUsername(const QString &uri, const QString &username)
+{
+    m_settings.setValue(QString("Connection/%1/sshUsername").arg(uri), username);
+    emit valueChanged(QString("Connection/%1/sshUsername").arg(uri));
+}
+
+QString Config::connSSHUsername(const QString &uri) const
+{
+    return m_settings.value(QString("Connection/%1/sshUsername").arg(uri), QString()).toString();
 }
 
 // Per-VM settings

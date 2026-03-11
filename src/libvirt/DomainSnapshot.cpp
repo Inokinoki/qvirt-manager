@@ -77,10 +77,9 @@ bool DomainSnapshot::isCurrent() const
         return false;
     }
 
-    // Check if this is the current snapshot
-    // This requires parsing snapshot XML to check current attribute
-    // Reserved for future implementation
-    return false;
+    // A snapshot is current if it has no parent
+    virDomainSnapshotPtr parent = virDomainSnapshotGetParent(m_snapshot, 0);
+    return (parent == nullptr);
 }
 
 bool DomainSnapshot::delete_(unsigned int flags)
@@ -103,16 +102,46 @@ bool DomainSnapshot::revert(unsigned int flags)
 
 DomainSnapshot *DomainSnapshot::parent() const
 {
-    // Parent lookup requires parsing snapshot XML relationships
-    // Reserved for future implementation
-    return nullptr;
+    if (!m_snapshot || !m_domain) {
+        return nullptr;
+    }
+
+    // Lookup parent snapshot
+    virDomainSnapshotPtr parentSnap = virDomainSnapshotGetParent(m_snapshot, 0);
+    if (!parentSnap) {
+        return nullptr;
+    }
+
+    // Create a new DomainSnapshot wrapper for the parent
+    return new DomainSnapshot(parentSnap, m_domain, const_cast<DomainSnapshot*>(this));
 }
 
 QList<DomainSnapshot*> DomainSnapshot::children() const
 {
-    // Children lookup requires querying domain for snapshot tree
-    // Reserved for future implementation
-    return QList<DomainSnapshot*>();
+    if (!m_snapshot || !m_domain) {
+        return QList<DomainSnapshot*>();
+    }
+
+    QList<DomainSnapshot*> childrenList;
+
+    // List child snapshots - virDomainSnapshotListAllChildren returns
+    // virDomainSnapshotPtr** directly, not names
+    virDomainSnapshotPtr *snaps = nullptr;
+    int numChildren = virDomainSnapshotListAllChildren(m_snapshot, &snaps, 0);
+    if (numChildren < 0) {
+        return childrenList;
+    }
+
+    for (int i = 0; i < numChildren; i++) {
+        if (snaps[i]) {
+            childrenList.append(new DomainSnapshot(snaps[i], m_domain,
+                const_cast<DomainSnapshot*>(this)));
+        }
+    }
+
+    // Free the array of snapshot pointers
+    free(snaps);
+    return childrenList;
 }
 
 QString DomainSnapshot::getXMLDesc(unsigned int flags)

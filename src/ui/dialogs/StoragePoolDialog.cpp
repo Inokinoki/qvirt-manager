@@ -598,6 +598,14 @@ void StoragePoolDialog::onVolumeUpload()
         return;
     }
 
+    // Ask user to select a file to upload
+    QString filename = QFileDialog::getOpenFileName(this, "Select File to Upload",
+        QString(), "All Files (*)");
+
+    if (filename.isEmpty()) {
+        return;
+    }
+
     // Ask for the volume name
     bool ok;
     QString volumeName = QInputDialog::getText(this, "Upload Volume",

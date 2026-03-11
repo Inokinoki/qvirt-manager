@@ -21,7 +21,6 @@ namespace QVirt {
 
 class Connection;
 class SystemTray;
-class ManagerWindow;
 
 /**
  * @brief Main application engine (singleton)
@@ -78,6 +77,7 @@ signals:
      * @brief Emitted when the application is closing
      */
     void appClosing();
+    void showManagerRequested();
 
 private slots:
     void onTick();
@@ -96,7 +96,6 @@ private:
     QTimer *m_tickTimer;
     QMap<QString, Connection *> m_connections;
     SystemTray *m_systemTray;
-    ManagerWindow *m_managerWindow;
 };
 
 } // namespace QVirt

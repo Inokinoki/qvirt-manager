@@ -160,10 +160,7 @@ bool StorageVolume::download(const QString &path, unsigned int flags)
         return false;
     }
 
-<<<<<<< HEAD
     // Download implementation with virStorageVolDownload requires stream management
-    // This is reserved for future implementation when file download is needed
-=======
     // Start the download from the volume
     if (virStorageVolDownload(m_volume, stream, 0, 0, flags) < 0) {
         file.close();
@@ -205,7 +202,6 @@ bool StorageVolume::download(const QString &path, unsigned int flags)
     return success;
 #else
     Q_UNUSED(flags);
->>>>>>> e09859117d53447bb3ade2a46a64b91f3615b34d
     return false;
 #endif
 }

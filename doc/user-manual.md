@@ -11,8 +11,9 @@
 7. [Storage Management](#storage-management)
 8. [Network Management](#network-management)
 9. [Snapshots](#snapshots)
-10. [Preferences](#preferences)
-11. [Troubleshooting](#troubleshooting)
+10. [VM Migration](#vm-migration)
+11. [Preferences](#preferences)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -273,7 +274,124 @@ Requires more disk space but allows resuming exactly where you left off.
 
 ---
 
-## Preferences
+## VM Migration
+
+QVirt-Manager supports migrating virtual machines between hypervisor hosts, with both live and offline migration modes.
+
+### Migration Modes
+
+#### Live Migration
+
+Live migration allows you to move a running VM from one host to another with minimal downtime. The VM continues running during the migration process.
+
+**Requirements for Live Migration:**
+- VM must be in running state
+- Shared storage between source and destination hosts
+- Compatible CPU models between hosts
+- Network connectivity between hosts
+
+#### Offline Migration
+
+Offline migration shuts down the VM before transferring it to the destination host. The VM will be powered off on the source and started on the destination.
+
+### Starting a Migration
+
+1. Select a VM from the list
+2. Click **VM → Migrate** or right-click → Migrate
+3. Configure migration options:
+
+**Basic Options:**
+- **Connection Type**: Choose SSH, TLS, or Peer-to-Peer
+- **Remote Host**: Destination hostname or IP address
+- **Remote Port**: Port for connection (22 for SSH, 16514 for TLS, 16509 for TCP)
+- **Username**: SSH username (for SSH connections)
+
+**Migration Mode:**
+- **Live Migration**: VM continues running during migration
+- **Offline Migration**: VM is shut off before migration
+
+**Advanced Options:**
+- **Persistent**: Save VM configuration on destination host
+- **Undefine Source**: Remove VM from source host after successful migration
+- **Compress**: Compress migration data to reduce bandwidth
+- **Allow Unsafe**: Skip storage verification (use with caution)
+- **Bandwidth Limit**: Limit migration bandwidth (0 = unlimited)
+- **Max Downtime**: Maximum allowed downtime in milliseconds (live migration)
+
+4. Click **Migrate** and confirm the migration summary
+
+### Connection Types
+
+#### SSH Migration (Recommended)
+
+Uses SSH tunnel for secure, encrypted migration:
+
+```
+qemu+ssh://user@remote-host/system
+```
+
+The connection URI is automatically constructed based on your inputs.
+
+#### TLS Migration
+
+Uses TLS for encrypted communication:
+
+```
+qemu://remote-host/system
+```
+
+Requires proper TLS certificates on both hosts.
+
+#### Peer-to-Peer Migration
+
+Direct TCP connection between hosts:
+
+```
+qemu+tcp://remote-host:16509/system
+```
+
+Fastest option for trusted networks, but unencrypted.
+
+### Migration Tips
+
+**Before Migrating:**
+1. Verify shared storage is accessible from both hosts
+2. Check network connectivity and firewall rules
+3. Ensure compatible CPU models
+4. Stop I/O-intensive operations for better performance
+
+**During Migration:**
+- Monitor progress in the status label
+- For large VMs, consider setting bandwidth limits
+- Live migration may take several minutes depending on RAM size and network speed
+
+**After Migration:**
+- Verify VM is accessible on destination host
+- Check VM console and network connectivity
+- Update any configuration that references the old host
+- Remove source VM if no longer needed
+
+### Troubleshooting Migration
+
+**Migration Fails to Start:**
+- Check libvirt is running on both hosts
+- Verify authentication credentials
+- Ensure VM is in correct state (running for live, shut off for offline)
+- Check firewall rules allow required ports
+
+**Performance Issues:**
+- Reduce bandwidth limit if network is saturated
+- Consider offline migration for very large VMs
+- Use compressed migration to reduce data transferred
+- Check for disk I/O bottlenecks
+
+**Storage Errors:**
+- Verify shared storage is mounted on both hosts
+- Check storage pool paths match
+- Use "Allow Unsafe" only if you understand the risks
+- Ensure VM disks are not in use by other VMs
+
+---
 
 Access preferences via **Edit → Preferences** or **Ctrl+,**
 

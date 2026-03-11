@@ -67,10 +67,10 @@ static int virConnectAuthCallback(virConnectCredentialPtr cred, unsigned int ncr
 
 // Auth callback struct for libvirt
 static virConnectAuth authHelper = {
-    .cb = virConnectAuthCallback,
-    .cbdata = nullptr,
     .credtype = nullptr,
-    .ncredtype = 0
+    .ncredtype = 0,
+    .cb = virConnectAuthCallback,
+    .cbdata = nullptr
 };
 #endif
 

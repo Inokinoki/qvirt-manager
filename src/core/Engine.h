@@ -20,6 +20,7 @@
 namespace QVirt {
 
 class Connection;
+class SystemTray;
 
 /**
  * @brief Main application engine (singleton)
@@ -29,6 +30,7 @@ class Connection;
  * - Connection management
  * - Global tick timer for polling updates
  * - Application lifecycle
+ * - System tray integration
  *
  * Mirrors the Python vmmEngine class from virt-manager
  */
@@ -53,6 +55,11 @@ public:
      */
     void showManager();
 
+    /**
+     * @brief Get system tray instance
+     */
+    SystemTray *systemTray() const { return m_systemTray; }
+
 signals:
     /**
      * @brief Emitted when the application is closing
@@ -62,6 +69,8 @@ signals:
 private slots:
     void onTick();
     void onAboutToQuit();
+    void onShowManagerFromTray();
+    void onQuitFromTray();
 
 private:
     Engine();
@@ -73,6 +82,7 @@ private:
 
     QTimer *m_tickTimer;
     QMap<QString, Connection *> m_connections;
+    SystemTray *m_systemTray;
 };
 
 } // namespace QVirt

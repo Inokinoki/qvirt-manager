@@ -34,7 +34,8 @@ void MigrateDialog::setupUI()
     auto *mainLayout = new QVBoxLayout(this);
 
     // Title
-    auto *titleLabel = new QLabel(QString("<h2>Migrate '%1'</h2>").arg(m_domain->name()));
+    QString vmName = m_domain ? m_domain->name() : tr("Unknown VM");
+    auto *titleLabel = new QLabel(QString("<h2>Migrate '%1'</h2>").arg(vmName));
     titleLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(titleLabel);
 
@@ -222,22 +223,24 @@ void MigrateDialog::validateAndAccept()
     }
 
     // Check domain state for live migration
-    if (m_liveRadio->isChecked()) {
-        if (m_domain->state() != Domain::StateRunning) {
-            m_statusLabel->setText("<span style='color: red;'>Error: VM must be running for live migration</span>");
-            return;
-        }
-    } else {
-        if (m_domain->state() != Domain::StateShutOff) {
-            auto result = QMessageBox::warning(
-                this,
-                "VM Running",
-                "The VM is currently running. It will be shut off before offline migration.\n\nContinue?",
-                QMessageBox::Ok | QMessageBox::Cancel,
-                QMessageBox::Cancel
-            );
-            if (result != QMessageBox::Ok) {
+    if (m_domain) {
+        if (m_liveRadio->isChecked()) {
+            if (m_domain->state() != Domain::StateRunning) {
+                m_statusLabel->setText("<span style='color: red;'>Error: VM must be running for live migration</span>");
                 return;
+            }
+        } else {
+            if (m_domain->state() != Domain::StateShutOff) {
+                auto result = QMessageBox::warning(
+                    this,
+                    "VM Running",
+                    "The VM is currently running. It will be shut off before offline migration.\n\nContinue?",
+                    QMessageBox::Ok | QMessageBox::Cancel,
+                    QMessageBox::Cancel
+                );
+                if (result != QMessageBox::Ok) {
+                    return;
+                }
             }
         }
     }

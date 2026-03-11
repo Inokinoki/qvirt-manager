@@ -5,6 +5,8 @@ add_library(qvirt-core
     core/Engine.cpp
     core/Error.cpp
     core/Config.cpp
+    core/SystemTray.cpp
+    core/ProgressDialog.cpp
 )
 
 target_include_directories(qvirt-core

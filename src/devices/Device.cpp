@@ -59,6 +59,31 @@ DeviceAddress::DeviceAddress(const DeviceAddress &other)
 {
 }
 
+DeviceAddress &DeviceAddress::operator=(const DeviceAddress &other)
+{
+    if (this != &other) {
+        type = other.type;
+        domain = other.domain;
+        pciBus = other.pciBus;
+        slot = other.slot;
+        function = other.function;
+        controller = other.controller;
+        driveBus = other.driveBus;
+        target = other.target;
+        unit = other.unit;
+        virtioBus = other.virtioBus;
+        port = other.port;
+        iobase = other.iobase;
+        irq = other.irq;
+        reg = other.reg;
+        cssid = other.cssid;
+        ssid = other.ssid;
+        devno = other.devno;
+        base = other.base;
+    }
+    return *this;
+}
+
 bool DeviceAddress::isEmpty() const
 {
     return type == AddressType::None;

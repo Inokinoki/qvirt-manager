@@ -21,6 +21,7 @@
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 
 #include "../../libvirt/Connection.h"
 
@@ -57,6 +58,7 @@ private slots:
 
 private:
     QComboBox *m_modeCombo;
+    QLabel *m_descLabel;
 };
 
 /**

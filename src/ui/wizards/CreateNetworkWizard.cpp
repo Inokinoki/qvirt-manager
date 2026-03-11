@@ -70,10 +70,10 @@ NetworkModePage::NetworkModePage(QWidget *parent)
     layout->addWidget(modeGroup);
 
     // Description
-    auto *descLabel = new QLabel();
-    descLabel->setWordWrap(true);
-    descLabel->setStyleSheet("QLabel { padding: 10px; }");
-    layout->addWidget(descLabel);
+    m_descLabel = new QLabel();
+    m_descLabel->setWordWrap(true);
+    m_descLabel->setStyleSheet("QLabel { padding: 10px; }");
+    layout->addWidget(m_descLabel);
 
     connect(m_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &NetworkModePage::updateDescription);
@@ -109,9 +109,8 @@ void NetworkModePage::updateDescription()
                "Recommended for: Advanced users wanting direct network access.";
     }
 
-    auto *descLabel = findChild<QLabel*>();
-    if (descLabel) {
-        descLabel->setText(desc);
+    if (m_descLabel) {
+        m_descLabel->setText(desc);
     }
 }
 
@@ -207,9 +206,10 @@ NetworkForwardPage::NetworkForwardPage(QWidget *parent)
 
     auto *deviceGroup = new QGroupBox("Physical Device");
     deviceGroup->setEnabled(false);
+    auto *deviceLayout = new QVBoxLayout(deviceGroup);
     m_devEdit = new QLineEdit();
     m_devEdit->setPlaceholderText("virbr0");
-    deviceGroup->layout()->addWidget(m_devEdit);
+    deviceLayout->addWidget(m_devEdit);
 
     layout->addWidget(deviceGroup);
 

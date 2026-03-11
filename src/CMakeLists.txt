@@ -79,17 +79,6 @@ target_link_libraries(qvirt-libvirt
         Qt${QT_VERSION_MAJOR}::Xml
 )
 
-if(LIBVIRT_FOUND)
-    target_link_libraries(qvirt-libvirt
-        PRIVATE
-            ${LIBVIRT_LIBRARIES}
-    )
-    target_compile_definitions(qvirt-libvirt
-        PUBLIC
-            LIBVIRT_FOUND
-    )
-endif()
-
 # Console library
 add_library(qvirt-console
     console/Viewer.cpp
@@ -247,12 +236,7 @@ target_link_libraries(qvirt-manager
         Qt${QT_VERSION_MAJOR}::Network
 )
 
-if(LIBVIRT_FOUND)
-    target_link_libraries(qvirt-manager
-        PRIVATE
-            ${LIBVIRT_LIBRARIES}
-    )
-endif()
+# Note: libvirt is already linked via qvirt-core and qvirt-libvirt static libraries
 
 # Install
 install(TARGETS qvirt-manager DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -184,8 +184,21 @@ bool Connection::isOpen() const
     return m_conn != nullptr && m_state == Active;
 }
 
+void Connection::refresh()
+{
+    if (!isOpen()) {
+        return;
+    }
+    initAllResources();
+}
+
+
 void Connection::close()
 {
+    if (!m_conn) {
+        return;  // Already closed
+    }
+
     // Clean up cached objects
     for (auto *domain : m_domains) {
         delete domain;
@@ -357,6 +370,27 @@ void Connection::tick()
 void Connection::initAllResources()
 {
     qDebug() << "Initializing resources for" << m_uri;
+
+    // Clear existing cache before repopulating
+    for (auto *domain : m_domains) {
+        delete domain;
+    }
+    m_domains.clear();
+
+    for (auto *network : m_networks) {
+        delete network;
+    }
+    m_networks.clear();
+
+    for (auto *pool : m_storagePools) {
+        delete pool;
+    }
+    m_storagePools.clear();
+
+    for (auto *device : m_nodeDevices) {
+        delete device;
+    }
+    m_nodeDevices.clear();
 
     // List all domains (active and inactive)
     int numDomains = virConnectNumOfDomains(m_conn);

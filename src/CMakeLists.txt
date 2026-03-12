@@ -7,6 +7,7 @@ add_library(qvirt-core
     core/Config.cpp
     core/SystemTray.cpp
     core/ProgressDialog.cpp
+    core/OSDatabase.cpp
 )
 
 target_include_directories(qvirt-core
@@ -36,6 +37,18 @@ if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-core
         PRIVATE
             ${LIBVIRT_LIBRARIES}
+    )
+endif()
+
+# Link libosinfo if available
+if(LIBOSINFO_FOUND)
+    target_include_directories(qvirt-core
+        PRIVATE
+            ${LIBOSINFO_INCLUDE_DIRS}
+    )
+    target_link_libraries(qvirt-core
+        PRIVATE
+            ${LIBOSINFO_LIBRARIES}
     )
 endif()
 
@@ -99,6 +112,30 @@ target_link_libraries(qvirt-console
         Qt${QT_VERSION_MAJOR}::Gui
 )
 
+# Link VNC library if available
+if(GTKVNC_FOUND)
+    target_include_directories(qvirt-console
+        PRIVATE
+            ${GTKVNC_INCLUDE_DIRS}
+    )
+    target_link_libraries(qvirt-console
+        PRIVATE
+            ${GTKVNC_LIBRARIES}
+    )
+endif()
+
+# Link SPICE library if available
+if(SPICEGTK_FOUND)
+    target_include_directories(qvirt-console
+        PRIVATE
+            ${SPICEGTK_INCLUDE_DIRS}
+    )
+    target_link_libraries(qvirt-console
+        PRIVATE
+            ${SPICEGTK_LIBRARIES}
+    )
+endif()
+
 if(LIBVIRT_FOUND)
     target_link_libraries(qvirt-libvirt
         PRIVATE
@@ -127,6 +164,7 @@ add_library(qvirt-devices
     devices/RNGDevice.cpp
     devices/SmartcardDevice.cpp
     devices/MemballoonDevice.cpp
+    devices/ChannelDevice.cpp
 )
 
 target_include_directories(qvirt-devices
@@ -158,6 +196,7 @@ add_library(qvirt-ui
     ui/dialogs/MigrateDialog.cpp
     ui/dialogs/PreferencesDialog.cpp
     ui/dialogs/XMLEditor.cpp
+    ui/dialogs/OSListDialog.cpp
     ui/widgets/GraphWidget.cpp
     ui/widgets/ContextMenu.cpp
     ui/vmwindow/VMWindow.cpp

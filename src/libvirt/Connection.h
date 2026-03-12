@@ -110,10 +110,13 @@ signals:
     void storagePoolAdded(StoragePool *pool);
     void storagePoolRemoved(StoragePool *pool);
 
-public slots:
-    void tick();
+ public slots:
+     void tick();
 
-private:
+     // Refresh cached objects (domains, networks, storage pools)
+     void refresh();
+
+ private:
     Connection(const QString &uri);
     Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
     void initAllResources();

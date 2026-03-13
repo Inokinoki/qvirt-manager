@@ -23,16 +23,10 @@ ChannelDevice::ChannelDevice(QObject *parent)
     , m_targetName("org.qemu.guest_agent.0")
     , m_sourceMode("bind")
 {
-    setDeviceName("Channel");
 }
 
 ChannelDevice::~ChannelDevice()
 {
-}
-
-Device::DeviceType ChannelDevice::type() const
-{
-    return DeviceType::Channel;
 }
 
 void ChannelDevice::setChannelType(ChannelType type)

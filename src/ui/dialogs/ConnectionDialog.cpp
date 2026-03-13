@@ -242,17 +242,17 @@ QString ConnectionDialog::buildURI() const
 {
     QString hypervisor = m_typeCombo->currentData().toString();
 
-    // For custom URI preset (e.g., qemu:///session)
-    if (hypervisor.contains(":///")) {
-        return hypervisor;
-    }
-
     // Local connection (no remote)
     if (!m_remoteCheck->isChecked()) {
+        // For custom URI preset (e.g., qemu:///session)
+        if (hypervisor.contains(":///")) {
+            return hypervisor;
+        }
         return hypervisor + ":///system";
     }
 
-    // Remote connection
+    // Remote connection - build remote URI regardless of hypervisor type
+    // Even "qemu:///session" can be accessed remotely via SSH
     QString transport = m_transportCombo->currentData().toString();
     QString hostname = m_hostnameEdit->text().trimmed();
     QString username = m_usernameEdit->text().trimmed();
@@ -262,7 +262,19 @@ QString ConnectionDialog::buildURI() const
         return QString();
     }
 
-    // Build URI: hypervisor+transport://[username@]hostname[:port]/system
+    // For session hypervisor, extract the base hypervisor name
+    if (hypervisor.contains("qemu:///session")) {
+        hypervisor = "qemu";
+    }
+
+    // Build URI: hypervisor+transport://[username@]hostname[:port]/session or /system
+    // Use /session only if explicitly selected and remote (for unprivileged remote containers)
+    QString systemPath = "/system";
+    if (m_typeCombo->currentData().toString() == "qemu:///session") {
+        // For QEMU Session remote connections, use /session
+        systemPath = "/session";
+    }
+
     QString uri = hypervisor + "+" + transport + "://";
 
     if (!username.isEmpty()) {
@@ -275,7 +287,7 @@ QString ConnectionDialog::buildURI() const
         uri += ":" + port;
     }
 
-    uri += "/system";
+    uri += systemPath;
 
     // Note: SSH key path is stored separately and not part of the URI
     // Libvirt will use SSH agent or default key locations

@@ -43,6 +43,14 @@ StoragePoolDialog::StoragePoolDialog(Connection *conn, QWidget *parent)
     updatePoolList();
 }
 
+StoragePoolDialog::~StoragePoolDialog()
+{
+    // Clear pointers to avoid dangling references
+    // Note: We don't delete m_currentPool or m_currentVolume as they are owned by the Connection
+    m_currentPool = nullptr;
+    m_currentVolume = nullptr;
+}
+
 void StoragePoolDialog::setupUI()
 {
     auto *mainLayout = new QVBoxLayout(this);
@@ -265,6 +273,7 @@ void StoragePoolDialog::updatePoolList()
 void StoragePoolDialog::updateVolumeList()
 {
     if (!m_currentPool) {
+        m_volumeInfoLabel->setText("Select a pool to view volumes");
         return;
     }
 
@@ -725,9 +734,37 @@ void StoragePoolDialog::onRefresh()
 
 void StoragePoolDialog::onContextMenuRequested(const QPoint &pos)
 {
-    if (m_poolList->indexAt(pos).isValid()) {
-        m_contextMenu->exec(m_poolList->viewport()->mapToGlobal(pos));
+    QModelIndex index = m_poolList->indexAt(pos);
+    if (!index.isValid()) {
+        return;
     }
+
+    // Get the pool name from the clicked row
+    QAbstractItemModel *model = m_poolList->model();
+    QString poolName = model->data(model->index(index.row(), 0)).toString();
+
+    // Find and set the current pool
+    QList<StoragePool*> pools = m_connection->storagePools();
+    m_currentPool = nullptr;
+    for (StoragePool *pool : pools) {
+        if (pool && pool->name() == poolName) {
+            m_currentPool = pool;
+            break;
+        }
+    }
+
+    if (!m_currentPool) {
+        return;
+    }
+
+    // Update menu action states based on pool state
+    bool isActive = m_currentPool->state() == StoragePool::StateRunning;
+    m_actionStart->setEnabled(!isActive);
+    m_actionStop->setEnabled(isActive);
+    m_actionDelete->setEnabled(!isActive);
+    m_actionRefresh->setEnabled(isActive);
+
+    m_contextMenu->exec(m_poolList->viewport()->mapToGlobal(pos));
 }
 
 // ============================================================================

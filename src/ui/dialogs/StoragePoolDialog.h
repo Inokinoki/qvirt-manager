@@ -44,7 +44,7 @@ class StoragePoolDialog : public QDialog
 
 public:
     explicit StoragePoolDialog(Connection *conn, QWidget *parent = nullptr);
-    ~StoragePoolDialog() override = default;
+    ~StoragePoolDialog() override;
 
 private slots:
     void onPoolSelected();

@@ -7,6 +7,7 @@ add_library(qvirt-core
     core/Config.cpp
     core/SystemTray.cpp
     core/ProgressDialog.cpp
+    core/GuestAgent.cpp
 )
 
 target_include_directories(qvirt-core
@@ -46,6 +47,7 @@ if(LIBVIRT_FOUND)
         libvirt/Connection.cpp
         libvirt/Domain.cpp
         libvirt/DomainSnapshot.cpp
+        libvirt/DomainCheckpoint.cpp
         libvirt/Network.cpp
         libvirt/StoragePool.cpp
         libvirt/StorageVolume.cpp
@@ -55,12 +57,24 @@ if(LIBVIRT_FOUND)
     )
 else()
     # Create empty library when libvirt is not found
-    add_library(qvirt-libvirt STATIC)
+    add_library(qvirt-libvirt STATIC
+        libvirt/DomainCheckpoint.cpp
+    )
 endif()
 
 target_include_directories(qvirt-libvirt
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(qvirt-libvirt
+    PUBLIC
+        qvirt-core
+        qvirt-devices
+        qvirt-domain
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 if(LIBVIRT_FOUND)
@@ -127,6 +141,54 @@ add_library(qvirt-devices
     devices/RNGDevice.cpp
     devices/SmartcardDevice.cpp
     devices/MemballoonDevice.cpp
+    devices/PanicDevice.cpp
+    devices/VSockDevice.cpp
+    devices/USBRedirDevice.cpp
+    devices/SerialDevice.cpp
+    devices/ParallelDevice.cpp
+    devices/IOMMUDevice.cpp
+)
+
+target_include_directories(qvirt-devices
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(qvirt-devices
+    PUBLIC
+        qvirt-core
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Xml
+)
+
+# Domain library (CPU/Memory tuning, firmware, security, etc.)
+add_library(qvirt-domain
+    domain/CPUTune.cpp
+    domain/MemTune.cpp
+    domain/BlkIOTune.cpp
+    domain/NUMA.cpp
+    domain/MemoryBacking.cpp
+    domain/Firmware.cpp
+    domain/BootConfig.cpp
+    domain/Clock.cpp
+    domain/Features.cpp
+    domain/SecLabel.cpp
+    domain/LaunchSecurity.cpp
+    domain/CloudInit.cpp
+    domain/IOThread.cpp
+)
+
+target_include_directories(qvirt-domain
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(qvirt-domain
+    PUBLIC
+        qvirt-core
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 target_include_directories(qvirt-devices

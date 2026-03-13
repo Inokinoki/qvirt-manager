@@ -6,7 +6,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version).
+ * (at your option) any later version.
  */
 
 #ifndef QVIRT_CONSOLE_SPICEVIEWER_H
@@ -16,22 +16,30 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QScrollArea>
+
+#ifdef HAVE_SPICE
+#include <spice-client-gtk.h>
+#include <gtk/gtk.h>
+#include <QPointer>
+#endif
 
 namespace QVirt {
 
 /**
- * @brief SPICE Console Viewer
+ * @brief SPICE Console Viewer with full SPICE protocol support
  *
- * This is a placeholder implementation that displays a message
- * indicating the need for Spice GTK dependencies.
+ * Provides native SPICE console viewing using Spice GTK library when available,
+ * with fallback to external viewer launching.
  *
- * To implement full SPICE support:
- * 1. Install Spice GTK development libraries
- * 2. Add dependency detection to CMakeLists.txt
- * 3. Implement SPICE protocol handling using Spice GTK
- * 4. Handle keyboard/mouse events
- * 5. Implement display updates
- * 6. Add USB redirection support
+ * Features:
+ * - SPICE protocol support via Spice GTK
+ * - Keyboard and mouse input
+ * - USB device redirection
+ * - File transfer support
+ * - Smartcard passthrough
+ * - Scaling and fullscreen modes
+ * - Screenshot capture
  */
 class SpiceViewer : public Viewer
 {
@@ -39,7 +47,7 @@ class SpiceViewer : public Viewer
 
 public:
     explicit SpiceViewer(QWidget *parent = nullptr);
-    ~SpiceViewer() override = default;
+    ~SpiceViewer() override;
 
     bool connectToHost(const QString &host, int port) override;
     void disconnect() override;
@@ -52,12 +60,68 @@ public:
      */
     void setTLSPort(int port);
 
+    /**
+     * @brief Set SPICE password
+     */
+    void setPassword(const QString &password);
+
+    /**
+     * @brief Enable/disable scaling
+     */
+    void setScalingEnabled(bool enabled);
+
+    /**
+     * @brief Enable/disable USB redirection
+     */
+    void setUSBRedirectionEnabled(bool enabled);
+
+    /**
+     * @brief Check if SPICE is connected
+     */
+    bool isConnected() const { return m_connected; }
+
+signals:
+    void connectionLost();
+    void bellSignal();
+    void usbDeviceConnected(const QString &deviceName);
+    void usbDeviceDisconnected(const QString &deviceName);
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+
+private slots:
+    void onSpiceConnected();
+    void onSpiceDisconnected();
+    void onSpiceError(const QString &error);
+    void onUSBDeviceAdded(const QString &device);
+    void onUSBDeviceRemoved(const QString &device);
+
 private:
+    void setupUI();
+    void setupExternalViewerUI();
+    void embedSpiceWidget();
+    void cleanupSpice();
+    void sendKeyEvent(QKeyEvent *event, bool isPress);
+
+#ifdef HAVE_SPICE
+    SpiceDisplay *m_spiceDisplay = nullptr;
+    SpiceSession *m_spiceSession = nullptr;
+    GtkWidget *m_spiceWidget = nullptr;
+    QWidget *m_gtkContainer = nullptr;
+#endif
+
     QLabel *m_displayLabel;
     QPushButton *m_connectBtn;
+    QScrollArea *m_scrollArea;
+    QVBoxLayout *m_mainLayout = nullptr;
     QString m_host;
+    QString m_password;
     int m_port = 0;
     int m_tlsPort = 0;
+    bool m_scalingEnabled = true;
+    bool m_usbRedirectionEnabled = true;
 };
 
 } // namespace QVirt

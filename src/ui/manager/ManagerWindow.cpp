@@ -163,6 +163,13 @@ void ManagerWindow::setupUI()
 
     rightLayout->addWidget(m_vmList);
 
+    // Connection status label (shown when connecting)
+    m_vmListStatusLabel = new QLabel();
+    m_vmListStatusLabel->setAlignment(Qt::AlignCenter);
+    m_vmListStatusLabel->setStyleSheet("color: gray; font-style: italic;");
+    m_vmListStatusLabel->hide();
+    rightLayout->addWidget(m_vmListStatusLabel);
+
     // VM control buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
 
@@ -587,6 +594,40 @@ void ManagerWindow::onVMSelectionChanged()
 
 void ManagerWindow::onConnectionSelectionChanged()
 {
+    QModelIndex connIndex = m_connectionList->currentIndex();
+    if (!connIndex.isValid()) {
+        // No connection selected, clear VM list
+        m_vmModel->setConnection(nullptr);
+        m_statusLabel->setText(tr("No connection selected"));
+        updateVMControls();
+        return;
+    }
+
+    // Get the connection for the selected row
+    // First try active connections, then check disconnected ones
+    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
+    if (!conn) {
+        // Check if it's a disconnected connection
+        ConnectionInfo *info = m_connectionModel->connectionInfoAt(connIndex.row());
+        if (info) {
+            m_statusLabel->setText(tr("Disconnected: %1").arg(info->uri));
+            m_vmModel->setConnection(nullptr);
+            updateVMControls();
+            return;
+        }
+        // Fallback - try to get by URI
+        QString uri = m_connectionModel->data(connIndex, ConnectionListModel::URIRole).toString();
+        conn = m_connectionModel->connectionByURI(uri);
+    }
+
+    if (conn) {
+        m_vmModel->setConnection(conn);
+        m_statusLabel->setText(tr("Connected to: %1").arg(conn->uri()));
+    } else {
+        m_vmModel->setConnection(nullptr);
+        m_statusLabel->setText(tr("No valid connection"));
+    }
+
     updateVMControls();
 }
 
@@ -793,15 +834,20 @@ void ManagerWindow::onConnectToConnection()
     QString sshKeyPath = config->connSSHKeyPath(uri);
     QString sshUsername = config->connSSHUsername(uri);
 
-    // Try to connect
-    Connection *newConn = Connection::open(uri, sshKeyPath, QString());
-    if (newConn) {
-        addConnection(newConn);
-        m_statusLabel->setText(tr("Connected to: %1").arg(uri));
-    } else {
-        QMessageBox::warning(this, tr("Connection Failed"),
-            tr("Failed to connect to: %1").arg(uri));
-    }
+    // Create connection and connect asynchronously
+    auto *newConn = Connection::create(uri);
+    connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
+    
+    // Show loading status
+    m_vmListStatusLabel->setText(tr("Connecting to %1...").arg(uri));
+    m_vmListStatusLabel->show();
+    m_vmList->setEnabled(false);
+    
+    // Start async connection
+    newConn->openAsync(sshKeyPath, QString());
+    
+    // Temporarily store the connection until connection completes
+    m_connectingConnections[uri] = newConn;
 }
 
 void ManagerWindow::onDisconnectFromConnection()
@@ -941,6 +987,51 @@ void ManagerWindow::onDeleteConnection()
         }
 
         m_statusLabel->setText(tr("Connection deleted: %1").arg(uri));
+    }
+}
+
+void ManagerWindow::openConsole()
+{
+    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    if (!domain) {
+        return;
+    }
+    auto *vmWindow = new VMWindow(domain, this);
+    vmWindow->show();
+}
+
+void ManagerWindow::onConnectionStateChanged(Connection::State state)
+{
+    auto *conn = qobject_cast<Connection *>(sender());
+    if (!conn) {
+        return;
+    }
+
+    QString uri = conn->uri();
+
+    if (state == Connection::Active) {
+        // Connection succeeded
+        m_vmListStatusLabel->hide();
+        m_vmList->setEnabled(true);
+        
+        addConnection(conn);
+        m_connectingConnections.remove(uri);
+        
+        m_statusLabel->setText(tr("Connected to: %1").arg(uri));
+    } else if (state == Connection::ConnectionFailed) {
+        // Connection failed
+        m_vmListStatusLabel->setText(tr("Failed to connect to %1: %2").arg(uri, conn->connectionError()));
+        m_vmList->setEnabled(true);
+        
+        // Remove the failed connection
+        conn->deleteLater();
+        m_connectingConnections.remove(uri);
+        
+        QMessageBox::warning(this, tr("Connection Failed"),
+            tr("Failed to connect to: %1\n\n%2").arg(uri, conn->connectionError()));
+    } else if (state == Connection::Connecting) {
+        // Still connecting - update status
+        m_vmListStatusLabel->setText(tr("Connecting to %1...").arg(uri));
     }
 }
 

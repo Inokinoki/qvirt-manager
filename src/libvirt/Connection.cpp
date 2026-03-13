@@ -16,9 +16,12 @@
 #include "NodeDevice.h"
 #include "../core/Error.h"
 #include <QDebug>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
+#include <libvirt/virterror.h>
 
 // Windows.h defines 'state' as a macro which breaks our code
 #ifdef _WIN32
@@ -51,12 +54,9 @@ static int virConnectAuthCallback(virConnectCredentialPtr cred, unsigned int ncr
             }
         } else if (cred[i].type == VIR_CRED_EXTERNAL) {
             // External auth method (e.g., SSH agent)
-            if (cred[i].prompt && strcmp(cred[i].prompt, "Auth Name") == 0) {
-                // For SSH key auth, we can set the SSH_AUTH_SOCK environment variable
-                // or the user can configure it in ~/.ssh/config
-                // The sshKeyPath would typically be used via SSH config
-                continue;
-            }
+            // For SSH key auth, SSH will use the key from ssh-agent or SSH config
+            // The sshKeyPath should be configured via SSH config or the key should be loaded into ssh-agent
+            continue;
         } else {
             // Unsupported credential type
             return -1;
@@ -113,10 +113,26 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     authData.password = password;
     authData.sshKeyPath = sshKeyPath;
 
-    // For SSH key authentication, we can set the environment variable
-    // or rely on SSH config. The user should configure SSH config properly.
+    // For SSH key authentication with libvirt's SSH transport:
+    // libvirt uses the standard SSH client internally.
+    // We can configure SSH to use a specific key by setting the SSH command
+    // with the -i option via environment variables.
+    //
+    // libvirt checks these in order:
+    // 1. LIBVIRT_SSH - custom SSH command for libvirt
+    // 2. SSH - generic SSH command
+    // 3. Default: ssh
+    //
+    // We'll use LIBVIRT_SSH to specify the key file directly.
+    QByteArray originalLibvirtSsh;
     if (!sshKeyPath.isEmpty()) {
-        qputenv("LIBVIRT_SSH_KEY_PATH", sshKeyPath.toUtf8());
+        originalLibvirtSsh = qgetenv("LIBVIRT_SSH");
+        // Use ssh with the specified key, disabling other auth methods for efficiency
+        // Quote the key path to handle spaces
+        QString sshCmd = QString("ssh -i \"%1\" -o IdentitiesOnly=yes -o BatchMode=no")
+            .arg(sshKeyPath);
+        qputenv("LIBVIRT_SSH", sshCmd.toUtf8());
+        qDebug() << "Set LIBVIRT_SSH to:" << sshCmd;
     }
 
     // Extract username from URI for persistence
@@ -142,11 +158,19 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
         m_state = Disconnected;
         emit stateChanged(m_state);
         qWarning() << "Failed to connect to" << m_uri << "with authentication";
+        if (!sshKeyPath.isEmpty()) {
+            qWarning() << "SSH key was specified:" << sshKeyPath;
+            qWarning() << "Ensure the key is valid and has correct permissions";
+        }
     }
 
-    // Clear environment variable
+    // Restore original LIBVIRT_SSH environment variable
     if (!sshKeyPath.isEmpty()) {
-        qunsetenv("LIBVIRT_SSH_KEY_PATH");
+        if (originalLibvirtSsh.isEmpty()) {
+            qunsetenv("LIBVIRT_SSH");
+        } else {
+            qputenv("LIBVIRT_SSH", originalLibvirtSsh);
+        }
     }
 #else
     // No libvirt support
@@ -177,6 +201,87 @@ Connection *Connection::open(const QString &uri, const QString &sshKeyPath, cons
         return nullptr;
     }
     return conn;
+}
+
+Connection *Connection::create(const QString &uri)
+{
+    return new Connection(uri);
+}
+
+void Connection::openAsync(const QString &sshKeyPath, const QString &password)
+{
+    m_state = Connecting;
+    emit stateChanged(m_state);
+
+    auto *watcher = new QFutureWatcher<bool>(this);
+    
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        bool success = watcher->result();
+        
+        if (success) {
+            m_state = Active;
+            m_connectionError.clear();
+            qDebug() << "Async connection to" << m_uri << "succeeded";
+        } else {
+            m_state = ConnectionFailed;
+            if (m_connectionError.isEmpty()) {
+                m_connectionError = tr("Connection timed out or failed");
+            }
+            qWarning() << "Async connection to" << m_uri << "failed:" << m_connectionError;
+        }
+        
+        emit stateChanged(m_state);
+        watcher->deleteLater();
+    });
+
+    QFuture<bool> future = QtConcurrent::run([this, sshKeyPath, password]() -> bool {
+#ifdef LIBVIRT_FOUND
+        virConnectPtr conn = nullptr;
+        
+        if (sshKeyPath.isEmpty() && password.isEmpty()) {
+            conn = virConnectOpen(m_uri.toUtf8().constData());
+        } else {
+            ConnectionAuthData authData;
+            authData.password = password;
+            authData.sshKeyPath = sshKeyPath;
+            
+            QByteArray originalLibvirtSsh;
+            if (!sshKeyPath.isEmpty()) {
+                originalLibvirtSsh = qgetenv("LIBVIRT_SSH");
+                QString sshCmd = QString("ssh -i \"%1\" -o IdentitiesOnly=yes -o BatchMode=no -o ConnectTimeout=10")
+                    .arg(sshKeyPath);
+                qputenv("LIBVIRT_SSH", sshCmd.toUtf8());
+            }
+            
+            authHelper.cbdata = &authData;
+            conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &authHelper, 0);
+            
+            if (!sshKeyPath.isEmpty()) {
+                if (originalLibvirtSsh.isEmpty()) {
+                    qunsetenv("LIBVIRT_SSH");
+                } else {
+                    qputenv("LIBVIRT_SSH", originalLibvirtSsh);
+                }
+            }
+        }
+        
+        if (conn) {
+            virConnectClose(conn);
+            return true;
+        } else {
+            virErrorPtr err = virGetLastError();
+            if (err) {
+                m_connectionError = QString::fromUtf8(err->message);
+            }
+            return false;
+        }
+#else
+        m_connectionError = tr("libvirt not available");
+        return false;
+#endif
+    });
+    
+    watcher->setFuture(future);
 }
 
 bool Connection::isOpen() const
@@ -346,7 +451,9 @@ void Connection::tick()
     // Initial resource loading
     if (m_initialPoll && m_tickCounter > 2) {
         m_initialPoll = false;
+        qDebug() << "Starting initial resource loading...";
         initAllResources();
+        qDebug() << "Initial resource loading completed";
     }
 
     // Poll for changes
@@ -359,10 +466,12 @@ void Connection::tick()
         pollStoragePools();
     }
 
-    // Update all domain stats
-    for (auto *domain : m_domains) {
-        if (domain) {
-            domain->updateInfo();
+    // Update all domain stats - only if we have domains
+    if (!m_domains.isEmpty()) {
+        for (auto *domain : m_domains) {
+            if (domain) {
+                domain->updateInfo();
+            }
         }
     }
 }
@@ -399,19 +508,53 @@ void Connection::initAllResources()
     qDebug() << "Found" << numDomains << "active domains and"
              << numInactiveDomains << "inactive domains";
 
+    // Check for errors (negative return values indicate failure)
+    if (numDomains < 0) {
+        qWarning() << "Failed to get active domains:" << numDomains;
+        numDomains = 0;
+    }
+    if (numInactiveDomains < 0) {
+        qWarning() << "Failed to get inactive domains:" << numInactiveDomains;
+        numInactiveDomains = 0;
+    }
+
     // Get active domains
     if (numDomains > 0) {
         int *domainIds = new int[numDomains];
         int actualDomains = virConnectListDomains(m_conn, domainIds, numDomains);
         if (actualDomains >= 0) {
+            qDebug() << "Listing" << actualDomains << "active domains";
             for (int i = 0; i < actualDomains; i++) {
                 virDomainPtr domainPtr = virDomainLookupByID(m_conn, domainIds[i]);
                 if (domainPtr) {
+                    const char *name = virDomainGetName(domainPtr);
+                    if (!name || QString::fromUtf8(name).isEmpty()) {
+                        qWarning() << "Domain ID" << domainIds[i] << "has no name, skipping";
+                        virDomainFree(domainPtr);
+                        continue;
+                    }
                     auto *domain = new Domain(this, domainPtr);
+                    if (domain->name().isEmpty()) {
+                        qWarning() << "Domain wrapper created with empty name, skipping";
+                        delete domain;
+                        continue;
+                    }
+                    // Check if domain has valid state - skip if inaccessible
+                    if (domain->state() == Domain::StateNoState) {
+                        qWarning() << "Domain" << domain->name() << "has no valid state, skipping (may be inaccessible)";
+                        delete domain;
+                        virDomainFree(domainPtr);
+                        continue;
+                    }
                     m_domains[domain->name()] = domain;
+                    qDebug() << "Added active domain:" << domain->name();
                     emit domainAdded(domain);
+                } else {
+                    qWarning() << "Failed to look up domain by ID:" << domainIds[i];
                 }
             }
+        } else {
+            qWarning() << "Failed to list active domains:" << actualDomains;
         }
         delete[] domainIds;
     }
@@ -421,17 +564,47 @@ void Connection::initAllResources()
         char **domainNames = new char *[numInactiveDomains];
         int actualDomains = virConnectListDefinedDomains(m_conn, domainNames, numInactiveDomains);
         if (actualDomains >= 0) {
+            qDebug() << "Listing" << actualDomains << "inactive domains";
             for (int i = 0; i < actualDomains; i++) {
                 virDomainPtr domainPtr = virDomainLookupByName(m_conn, domainNames[i]);
                 if (domainPtr) {
+                    const char *name = virDomainGetName(domainPtr);
+                    if (!name || QString::fromUtf8(name).isEmpty()) {
+                        qWarning() << "Domain name" << domainNames[i] << "is empty, skipping";
+                        virDomainFree(domainPtr);
+                        continue;
+                    }
                     auto *domain = new Domain(this, domainPtr);
+                    if (domain->name().isEmpty()) {
+                        qWarning() << "Domain wrapper created with empty name, skipping";
+                        delete domain;
+                        continue;
+                    }
+                    // Check if domain has valid state - skip if inaccessible
+                    if (domain->state() == Domain::StateNoState) {
+                        qWarning() << "Domain" << domain->name() << "has no valid state, skipping (may be inaccessible)";
+                        delete domain;
+                        virDomainFree(domainPtr);
+                        continue;
+                    }
                     m_domains[domain->name()] = domain;
+                    qDebug() << "Added inactive domain:" << domain->name();
                     emit domainAdded(domain);
+                } else {
+                    qWarning() << "Failed to look up domain by name:" << domainNames[i];
                 }
                 free(domainNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list inactive domains:" << actualDomains;
         }
         delete[] domainNames;
+    }
+
+    if (m_domains.isEmpty()) {
+        qDebug() << "No domains found on remote host";
+    } else {
+        qDebug() << "Total domains loaded:" << m_domains.count();
     }
 
     // List networks
@@ -441,20 +614,34 @@ void Connection::initAllResources()
     qDebug() << "Found" << numNetworks << "active networks and"
              << numInactiveNetworks << "inactive networks";
 
+    // Check for errors
+    if (numNetworks < 0) {
+        qWarning() << "Failed to get active networks:" << numNetworks;
+        numNetworks = 0;
+    }
+    if (numInactiveNetworks < 0) {
+        qWarning() << "Failed to get inactive networks:" << numInactiveNetworks;
+        numInactiveNetworks = 0;
+    }
+
     // Get active networks
     if (numNetworks > 0) {
         char **networkNames = new char *[numNetworks];
         int actualNetworks = virConnectListNetworks(m_conn, networkNames, numNetworks);
         if (actualNetworks >= 0) {
+            qDebug() << "Listing" << actualNetworks << "active networks";
             for (int i = 0; i < actualNetworks; i++) {
                 virNetworkPtr networkPtr = virNetworkLookupByName(m_conn, networkNames[i]);
                 if (networkPtr) {
                     auto *network = new Network(this, networkPtr);
                     m_networks[network->name()] = network;
+                    qDebug() << "Added network:" << network->name();
                     emit networkAdded(network);
                 }
                 free(networkNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list active networks:" << actualNetworks;
         }
         delete[] networkNames;
     }
@@ -464,15 +651,19 @@ void Connection::initAllResources()
         char **networkNames = new char *[numInactiveNetworks];
         int actualNetworks = virConnectListDefinedNetworks(m_conn, networkNames, numInactiveNetworks);
         if (actualNetworks >= 0) {
+            qDebug() << "Listing" << actualNetworks << "inactive networks";
             for (int i = 0; i < actualNetworks; i++) {
                 virNetworkPtr networkPtr = virNetworkLookupByName(m_conn, networkNames[i]);
                 if (networkPtr) {
                     auto *network = new Network(this, networkPtr);
                     m_networks[network->name()] = network;
+                    qDebug() << "Added inactive network:" << network->name();
                     emit networkAdded(network);
                 }
                 free(networkNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list inactive networks:" << actualNetworks;
         }
         delete[] networkNames;
     }
@@ -484,20 +675,46 @@ void Connection::initAllResources()
     qDebug() << "Found" << numPools << "active storage pools and"
              << numInactivePools << "inactive storage pools";
 
+    // Check for errors
+    if (numPools < 0) {
+        qWarning() << "Failed to get active storage pools:" << numPools;
+        numPools = 0;
+    }
+    if (numInactivePools < 0) {
+        qWarning() << "Failed to get inactive storage pools:" << numInactivePools;
+        numInactivePools = 0;
+    }
+
     // Get active pools
     if (numPools > 0) {
         char **poolNames = new char *[numPools];
         int actualPools = virConnectListStoragePools(m_conn, poolNames, numPools);
         if (actualPools >= 0) {
+            qDebug() << "Listing" << actualPools << "active storage pools";
             for (int i = 0; i < actualPools; i++) {
+                QString poolName = QString::fromUtf8(poolNames[i]);
+                if (poolName.isEmpty()) {
+                    qWarning() << "Active storage pool at index" << i << "has empty name, skipping";
+                    free(poolNames[i]);
+                    continue;
+                }
                 virStoragePoolPtr poolPtr = virStoragePoolLookupByName(m_conn, poolNames[i]);
                 if (poolPtr) {
                     auto *pool = new StoragePool(this, poolPtr);
+                    if (pool->name().isEmpty()) {
+                        qWarning() << "StoragePool created with empty name, skipping";
+                        delete pool;
+                        free(poolNames[i]);
+                        continue;
+                    }
                     m_storagePools[pool->name()] = pool;
+                    qDebug() << "Added storage pool:" << pool->name();
                     emit storagePoolAdded(pool);
                 }
                 free(poolNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list active storage pools:" << actualPools;
         }
         delete[] poolNames;
     }
@@ -507,15 +724,31 @@ void Connection::initAllResources()
         char **poolNames = new char *[numInactivePools];
         int actualPools = virConnectListDefinedStoragePools(m_conn, poolNames, numInactivePools);
         if (actualPools >= 0) {
+            qDebug() << "Listing" << actualPools << "inactive storage pools";
             for (int i = 0; i < actualPools; i++) {
+                QString poolName = QString::fromUtf8(poolNames[i]);
+                if (poolName.isEmpty()) {
+                    qWarning() << "Inactive storage pool at index" << i << "has empty name, skipping";
+                    free(poolNames[i]);
+                    continue;
+                }
                 virStoragePoolPtr poolPtr = virStoragePoolLookupByName(m_conn, poolNames[i]);
                 if (poolPtr) {
                     auto *pool = new StoragePool(this, poolPtr);
+                    if (pool->name().isEmpty()) {
+                        qWarning() << "StoragePool created with empty name, skipping";
+                        delete pool;
+                        free(poolNames[i]);
+                        continue;
+                    }
                     m_storagePools[pool->name()] = pool;
+                    qDebug() << "Added inactive storage pool:" << pool->name();
                     emit storagePoolAdded(pool);
                 }
                 free(poolNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list inactive storage pools:" << actualPools;
         }
         delete[] poolNames;
     }
@@ -538,17 +771,32 @@ void Connection::pollDomains()
                 virDomainPtr domainPtr = virDomainLookupByID(m_conn, domainIds[i]);
                 if (domainPtr) {
                     const char *name = virDomainGetName(domainPtr);
+                    if (name && QString::fromUtf8(name).isEmpty()) {
+                        qWarning() << "Domain ID" << domainIds[i] << "has empty name, skipping";
+                        virDomainFree(domainPtr);
+                        continue;
+                    }
                     if (name) {
                         QString domainName = QString::fromUtf8(name);
                         currentDomainNames.insert(domainName);
 
                         if (!m_domains.contains(domainName)) {
                             auto *domain = new Domain(this, domainPtr);
+                            // Check if domain has valid state - skip if inaccessible
+                            if (domain->state() == Domain::StateNoState || domain->name().isEmpty()) {
+                                qWarning() << "Poll: Domain" << domainName << "has no valid state or empty name, skipping";
+                                delete domain;
+                                virDomainFree(domainPtr);
+                                continue;
+                            }
                             m_domains[domainName] = domain;
+                            qDebug() << "Poll: Added new active domain:" << domainName;
                             emit domainAdded(domain);
                         } else {
                             virDomainFree(domainPtr);
                         }
+                    } else {
+                        virDomainFree(domainPtr);
                     }
                 }
             }
@@ -563,13 +811,26 @@ void Connection::pollDomains()
         if (actualDomains >= 0) {
             for (int i = 0; i < actualDomains; i++) {
                 QString domainName = QString::fromUtf8(domainNames[i]);
+                if (domainName.isEmpty()) {
+                    qWarning() << "Inactive domain name at index" << i << "is empty, skipping";
+                    free(domainNames[i]);
+                    continue;
+                }
                 currentDomainNames.insert(domainName);
 
                 if (!m_domains.contains(domainName)) {
                     virDomainPtr domainPtr = virDomainLookupByName(m_conn, domainNames[i]);
                     if (domainPtr) {
                         auto *domain = new Domain(this, domainPtr);
+                        // Check if domain has valid state - skip if inaccessible
+                        if (domain->state() == Domain::StateNoState || domain->name().isEmpty()) {
+                            qWarning() << "Poll: Domain" << domainName << "has no valid state or empty name, skipping";
+                            delete domain;
+                            virDomainFree(domainPtr);
+                            continue;
+                        }
                         m_domains[domainName] = domain;
+                        qDebug() << "Poll: Added new inactive domain:" << domainName;
                         emit domainAdded(domain);
                     }
                 }
@@ -675,6 +936,16 @@ void Connection::pollStoragePools()
 
     QSet<QString> currentPoolNames;
 
+    // Check for errors
+    if (numPools < 0) {
+        qWarning() << "Failed to get active storage pools:" << numPools;
+        numPools = 0;
+    }
+    if (numInactivePools < 0) {
+        qWarning() << "Failed to get inactive storage pools:" << numInactivePools;
+        numInactivePools = 0;
+    }
+
     // Check active pools
     if (numPools > 0) {
         char **poolNames = new char *[numPools];
@@ -682,6 +953,11 @@ void Connection::pollStoragePools()
         if (actualPools >= 0) {
             for (int i = 0; i < actualPools; i++) {
                 QString poolName = QString::fromUtf8(poolNames[i]);
+                if (poolName.isEmpty()) {
+                    qWarning() << "Active storage pool name at index" << i << "is empty, skipping";
+                    free(poolNames[i]);
+                    continue;
+                }
                 currentPoolNames.insert(poolName);
 
                 if (!m_storagePools.contains(poolName)) {
@@ -689,11 +965,14 @@ void Connection::pollStoragePools()
                     if (poolPtr) {
                         auto *pool = new StoragePool(this, poolPtr);
                         m_storagePools[poolName] = pool;
+                        qDebug() << "Poll: Added storage pool:" << poolName;
                         emit storagePoolAdded(pool);
                     }
                 }
                 free(poolNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list active storage pools:" << actualPools;
         }
         delete[] poolNames;
     }
@@ -705,6 +984,11 @@ void Connection::pollStoragePools()
         if (actualPools >= 0) {
             for (int i = 0; i < actualPools; i++) {
                 QString poolName = QString::fromUtf8(poolNames[i]);
+                if (poolName.isEmpty()) {
+                    qWarning() << "Inactive storage pool name at index" << i << "is empty, skipping";
+                    free(poolNames[i]);
+                    continue;
+                }
                 currentPoolNames.insert(poolName);
 
                 if (!m_storagePools.contains(poolName)) {
@@ -712,11 +996,14 @@ void Connection::pollStoragePools()
                     if (poolPtr) {
                         auto *pool = new StoragePool(this, poolPtr);
                         m_storagePools[poolName] = pool;
+                        qDebug() << "Poll: Added inactive storage pool:" << poolName;
                         emit storagePoolAdded(pool);
                     }
                 }
                 free(poolNames[i]);
             }
+        } else {
+            qWarning() << "Failed to list inactive storage pools:" << actualPools;
         }
         delete[] poolNames;
     }

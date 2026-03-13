@@ -54,12 +54,13 @@ public:
     enum State {
         Disconnected,
         Connecting,
-        Active
+        Active,
+        ConnectionFailed
     };
     Q_ENUM(State)
 
     /**
-     * @brief Open a new libvirt connection
+     * @brief Open a new libvirt connection (blocking)
      * @param uri Connection URI (e.g., "qemu:///system" or "qemu+ssh://user@host/system")
      * @param sshKeyPath Optional path to SSH private key
      * @param password Optional password for authentication
@@ -67,6 +68,25 @@ public:
      */
     static Connection *open(const QString &uri, const QString &sshKeyPath = QString(),
                            const QString &password = QString());
+
+    /**
+     * @brief Create a connection object without opening (for async connection)
+     * @param uri Connection URI
+     * @return Connection object
+     */
+    static Connection *create(const QString &uri);
+
+    /**
+     * @brief Open a new libvirt connection asynchronously (non-blocking)
+     * @param sshKeyPath Optional path to SSH private key
+     * @param password Optional password for authentication
+     */
+    void openAsync(const QString &sshKeyPath = QString(), const QString &password = QString());
+
+    /**
+     * @brief Get connection error message after failed connection
+     */
+    QString connectionError() const { return m_connectionError; }
 
     ~Connection() override;
 
@@ -138,6 +158,9 @@ signals:
     // SSH credentials (for persistence)
     QString m_sshKeyPath;
     QString m_sshUsername;
+
+    // Connection error message
+    QString m_connectionError;
 
     // Object caches
     QMap<QString, Domain *> m_domains;

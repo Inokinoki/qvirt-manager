@@ -75,6 +75,8 @@ private slots:
     void onDisconnectFromConnection();
     void onEditConnection();
     void onDeleteConnection();
+    void openConsole();
+    void onConnectionStateChanged(Connection::State state);
 
 private:
     void setupUI();
@@ -94,6 +96,7 @@ private:
     // Right panel (VM list)
     QTableView *m_vmList;
     VMListModel *m_vmModel;
+    QLabel *m_vmListStatusLabel;
 
     // VM control buttons
     QPushButton *m_btnStart;
@@ -128,6 +131,9 @@ private:
 
     // Context menu and shortcuts
     KeyboardShortcuts *m_keyboardShortcuts;
+
+    // Pending connections (URI -> Connection)
+    QMap<QString, Connection *> m_connectingConnections;
 };
 
 } // namespace QVirt

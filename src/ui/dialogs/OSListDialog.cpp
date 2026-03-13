@@ -15,6 +15,7 @@
 #include <QDialogButtonBox>
 #include <QGroupBox>
 #include <QApplication>
+#include <QPushButton>
 
 namespace QVirt {
 

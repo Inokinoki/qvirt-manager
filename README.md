@@ -35,11 +35,11 @@ QVirt-Manager is a complete virtual machine management application built with Qt
 - ✅ **Network**: NAT, bridge, macvtap, direct, isolated
 - ✅ **Controllers**: USB, SCSI, SATA, PCI, IDE, virtio-serial
 - ✅ **Input**: Tablet, keyboard, mouse
-- ✅ **Graphics**: VNC, SPICE, SDL
+- ✅ **Graphics**: VNC, SPICE (native console viewers)
 - ✅ **Video**: QXL, virtio, cirrus, vmvga
 - ✅ **Sound**: ich6, ich9, ac97, es1370
 - ✅ **Host Passthrough**: USB, PCI device passthrough
-- ✅ **Special**: TPM, Watchdog, RNG, Smartcard, Filesystem (virtio-fs), Memballoon
+- ✅ **Special**: TPM, Watchdog, RNG, Smartcard, Filesystem (virtio-fs), Memballoon, Channel devices
 
 ## Screenshots
 
@@ -52,8 +52,14 @@ QVirt-Manager is a complete virtual machine management application built with Qt
 ### VM Details
 - Overview page: VM info, performance graphs
 - Details page: Hardware tree with device details
-- Console tab: VNC/SPICE viewer (requires external dependencies)
+- Console tab: VNC/SPICE viewer (native implementation with optional GtkVNC/Spice GTK)
 - Snapshots tab: Snapshot management
+
+### Advanced Features
+- ✅ **OS Detection**: Automatic OS detection from ISO/URL (libosinfo integration)
+- ✅ **OS Selection**: Searchable OS database with 30+ operating systems
+- ✅ **Channel Devices**: virtio-serial channels for guest agent communication
+- ✅ **Console Viewers**: Native VNC/SPICE support with fullscreen, scaling, USB redirection
 
 ### Management Dialogs
 - Storage Pool Browser: Manage pools and volumes
@@ -132,9 +138,30 @@ sudo apt install qvirt-manager
 - C++17 compiler (GCC 8+, Clang 10+, MSVC 2019+)
 
 ### Optional Dependencies
-- Spice GTK (for SPICE console)
-- GtkVnc (for VNC console)
-- libosinfo (for OS detection)
+
+For enhanced functionality, install these optional libraries:
+
+**Console Viewers:**
+```bash
+# Ubuntu/Debian
+sudo apt install libgvnc-1.0-dev libspice-client-gtk-3.0-dev
+
+# Fedora/RHEL
+sudo dnf install gvnc-devel spice-gtk3-devel
+```
+
+**OS Detection:**
+```bash
+# Ubuntu/Debian
+sudo apt install libosinfo-1.0-dev
+
+# Fedora/RHEL
+sudo dnf install libosinfo-devel
+```
+
+- Spice GTK (for native SPICE console with USB redirection)
+- GtkVNC (for native VNC console)
+- libosinfo (for automatic OS detection from ISO/URL)
 - libguestfs (for VM inspection)
 
 ## Usage

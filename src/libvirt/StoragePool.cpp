@@ -38,19 +38,28 @@ StoragePool::StoragePool(Connection *conn, virStoragePoolPtr pool)
         m_uuid = QString::fromUtf8(uuid);
     }
 
-    // Check if pool is active and get info
-    m_active = (virStoragePoolIsActive(m_pool) == 1);
+    // Check if pool is active - handle potential remote access errors
+    int isActive = virStoragePoolIsActive(m_pool);
+    if (isActive < 0) {
+        qWarning() << "Failed to check if storage pool" << m_name << "is active, assuming inactive";
+        m_active = false;
+    } else {
+        m_active = (isActive == 1);
+    }
+
     if (m_active) {
         m_state = StateRunning;
     }
 
-    // Get capacity/allocation info
+    // Get capacity/allocation info - handle potential remote access errors
     virStoragePoolInfo poolInfo;
     if (virStoragePoolGetInfo(m_pool, &poolInfo) == 0) {
         m_capacity = poolInfo.capacity;
         m_allocation = poolInfo.allocation;
         m_available = poolInfo.available;
         m_state = static_cast<PoolState>(poolInfo.state);
+    } else {
+        qWarning() << "Failed to get storage pool info for" << m_name;
     }
 
     // Get and parse XML to determine pool type
@@ -58,9 +67,11 @@ StoragePool::StoragePool(Connection *conn, virStoragePoolPtr pool)
     if (xml) {
         parseXML(QString::fromUtf8(xml));
         free(xml);
+    } else {
+        qWarning() << "Failed to get XML for storage pool" << m_name;
     }
 
-    qDebug() << "Created StoragePool wrapper for" << m_name;
+    qDebug() << "Created StoragePool wrapper for" << m_name << "(type:" << m_type << ", active:" << m_active << ")";
 }
 
 StoragePool::~StoragePool()
@@ -133,15 +144,19 @@ QList<StorageVolume*> StoragePool::volumes()
 
     // List all volumes in the pool
     int numVolumes = virStoragePoolNumOfVolumes(m_pool);
-    if (numVolumes < 0) {
+    if (numVolumes <= 0) {
         return volumeList;
     }
 
     // Get volume names
     char **names = new char*[numVolumes];
-    numVolumes = virStoragePoolListVolumes(m_pool, names, numVolumes);
+    int actualVolumes = virStoragePoolListVolumes(m_pool, names, numVolumes);
+    if (actualVolumes < 0) {
+        delete[] names;
+        return volumeList;
+    }
 
-    for (int i = 0; i < numVolumes; ++i) {
+    for (int i = 0; i < actualVolumes; ++i) {
         virStorageVolPtr vol = virStorageVolLookupByName(m_pool, names[i]);
         if (vol) {
             auto *volume = new StorageVolume(vol, this, this);

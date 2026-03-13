@@ -91,7 +91,12 @@ void Engine::onAboutToQuit()
 
 void Engine::onTick()
 {
-    // Poll for changes - connections handle their own updates
+    // Poll all registered connections for changes
+    for (auto *conn : m_connections) {
+        if (conn) {
+            conn->tick();
+        }
+    }
 }
 
 void Engine::onShowManagerFromTray()

@@ -71,8 +71,10 @@ void Domain::updateInfo()
 
     // Get domain info
     virDomainInfo info;
-    if (virDomainGetInfo(m_domain, &info) < 0) {
-        qWarning() << "Failed to get domain info for" << m_name;
+    int ret = virDomainGetInfo(m_domain, &info);
+    if (ret < 0) {
+        qWarning() << "Failed to get domain info for" << m_name << "- domain may be inaccessible";
+        // Don't return early - keep the domain but mark as inaccessible
         return;
     }
 

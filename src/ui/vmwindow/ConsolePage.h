@@ -24,8 +24,13 @@
 #include <QAction>
 
 #include "../../libvirt/Domain.h"
+#include "../widgets/ConsoleToolbar.h"
 
 namespace QVirt {
+
+// Forward declarations
+class VNCViewer;
+class SpiceViewer;
 
 /**
  * @brief Console Page for VMWindow
@@ -42,6 +47,8 @@ public:
     explicit ConsolePage(Domain *domain, QWidget *parent = nullptr);
     ~ConsolePage() override = default;
 
+    Q_DISABLE_COPY(ConsolePage)
+
     void refresh();
     void connectConsole();
     void disconnectConsole();
@@ -55,13 +62,22 @@ private slots:
     void onConnectClicked();
     void onDisconnectClicked();
     void onFullscreenToggled(bool checked);
-    void onSendKey();
+    void onSendKeyRequested(const QString &keyCombo);
     void onScreenshot();
     void onResizeGuestChanged(bool checked);
+    void onUSBRedirectionRequested();
+    void onFileTransferRequested();
+    void onScaleFitRequested();
+    void onScaleFillRequested();
+    void onScale100Requested();
+    void onViewerError(const QString &message);
+    void onViewerConnected();
+    void onViewerDisconnected();
 
 private:
     void setupUI();
     void setupToolbar();
+    void setupViewerStack();
     void setupInfoView();
     void setupPlaceholderView();
     void updateConsoleInfo();
@@ -82,18 +98,18 @@ private:
     QComboBox *m_keyComboCombo;
 
     // Toolbar
-    QToolBar *m_toolbar;
+    ConsoleToolbar *m_toolbar;
     QAction *m_actionConnect;
-    QAction *m_actionDisconnect;
-    QAction *m_actionFullscreen;
-    QAction *m_actionSendKey;
-    QAction *m_actionScreenshot;
-    QAction *m_actionGrabKeys;
-    QAction *m_actionResizeGuest;
 
     // Console state
     bool m_connected;
     bool m_fullscreen;
+    
+    // Viewer widgets
+    VNCViewer *m_vncViewer;
+    SpiceViewer *m_spiceViewer;
+    QWidget *m_currentViewer;
+    QString m_graphicsType;
 };
 
 } // namespace QVirt

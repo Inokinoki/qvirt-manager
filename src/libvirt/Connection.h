@@ -117,6 +117,10 @@ public:
     QString capabilities() const;
     QString libvirtVersion() const;
 
+    // Polling control
+    bool isPollingEnabled() const { return m_pollingEnabled; }
+    void setPollingEnabled(bool enabled) { m_pollingEnabled = enabled; }
+
     // SSH credentials (stored for persistence)
     QString sshKeyPath() const { return m_sshKeyPath; }
     QString sshUsername() const { return m_sshUsername; }
@@ -154,6 +158,7 @@ signals:
 
     int m_tickCounter;
     bool m_initialPoll;
+    bool m_pollingEnabled;
 
     // SSH credentials (for persistence)
     QString m_sshKeyPath;

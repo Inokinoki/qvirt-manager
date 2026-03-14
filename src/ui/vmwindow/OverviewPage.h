@@ -22,6 +22,8 @@
 #include "../../libvirt/Domain.h"
 #include "../widgets/GraphWidget.h"
 
+class GuestAgentDetails;
+
 namespace QVirt {
 
 /**

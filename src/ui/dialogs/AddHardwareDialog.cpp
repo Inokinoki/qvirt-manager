@@ -24,6 +24,13 @@
 #include "../../devices/RNGDevice.h"
 #include "../../devices/SmartcardDevice.h"
 #include "../../devices/MemballoonDevice.h"
+#include "../../devices/USBRedirDevice.h"
+#include "../../devices/VSockDevice.h"
+#include "../../devices/PanicDevice.h"
+#include "../../devices/SerialDevice.h"
+#include "../../devices/ParallelDevice.h"
+#include "../../devices/IOMMUDevice.h"
+#include "../../devices/ChannelDevice.h"
 #include "../../core/Error.h"
 
 #include <QMessageBox>
@@ -136,6 +143,34 @@ void AddHardwareDialog::setupDeviceList()
     item->setData(Qt::UserRole, static_cast<int>(DeviceType::Memballoon));
     m_deviceList->addItem(item);
 
+    item = new QListWidgetItem("USB Redirection");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::USBRedir));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("VSOCK");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::VSOCK));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Panic Device");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Panic));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Serial Port");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Serial));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Parallel Port");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Parallel));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("IOMMU");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::IOMMU));
+    m_deviceList->addItem(item);
+
+    item = new QListWidgetItem("Channel");
+    item->setData(Qt::UserRole, static_cast<int>(DeviceType::Channel));
+    m_deviceList->addItem(item);
+
     m_deviceList->setCurrentRow(0);
 }
 
@@ -156,6 +191,13 @@ void AddHardwareDialog::setupDevicePages()
     auto *rngPage = new RNGDevicePage(this);
     auto *smartcardPage = new SmartcardDevicePage(this);
     auto *memballoonPage = new MemballoonDevicePage(this);
+    auto *usbRedirPage = new USBRedirDevicePage(this);
+    auto *vsockPage = new VSOCKDevicePage(this);
+    auto *panicPage = new PanicDevicePage(this);
+    auto *serialPage = new SerialDevicePage(this);
+    auto *parallelPage = new ParallelDevicePage(this);
+    auto *iommuPage = new IOMMUDevicePage(this);
+    auto *channelPage = new ChannelDevicePage(this);
 
     m_pageStack->addWidget(storagePage);
     m_pageStack->addWidget(networkPage);
@@ -171,6 +213,13 @@ void AddHardwareDialog::setupDevicePages()
     m_pageStack->addWidget(watchdogPage);
     m_pageStack->addWidget(smartcardPage);
     m_pageStack->addWidget(memballoonPage);
+    m_pageStack->addWidget(usbRedirPage);
+    m_pageStack->addWidget(vsockPage);
+    m_pageStack->addWidget(panicPage);
+    m_pageStack->addWidget(serialPage);
+    m_pageStack->addWidget(parallelPage);
+    m_pageStack->addWidget(iommuPage);
+    m_pageStack->addWidget(channelPage);
 }
 
 void AddHardwareDialog::onDeviceTypeChanged(QListWidgetItem *current, QListWidgetItem *previous)
@@ -227,6 +276,27 @@ void AddHardwareDialog::onDeviceTypeChanged(QListWidgetItem *current, QListWidge
         break;
     case DeviceType::Memballoon:
         m_pageStack->setCurrentIndex(13);
+        break;
+    case DeviceType::USBRedir:
+        m_pageStack->setCurrentIndex(14);
+        break;
+    case DeviceType::VSOCK:
+        m_pageStack->setCurrentIndex(15);
+        break;
+    case DeviceType::Panic:
+        m_pageStack->setCurrentIndex(16);
+        break;
+    case DeviceType::Serial:
+        m_pageStack->setCurrentIndex(17);
+        break;
+    case DeviceType::Parallel:
+        m_pageStack->setCurrentIndex(18);
+        break;
+    case DeviceType::IOMMU:
+        m_pageStack->setCurrentIndex(19);
+        break;
+    case DeviceType::Channel:
+        m_pageStack->setCurrentIndex(20);
         break;
     default:
         break;
@@ -1082,6 +1152,348 @@ Device* MemballoonDevicePage::createDevice()
 }
 
 bool MemballoonDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// USBRedirDevicePage
+//=============================================================================
+
+USBRedirDevicePage::USBRedirDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void USBRedirDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_busSpin = new QSpinBox();
+    m_busSpin->setRange(0, 255);
+    m_busSpin->setValue(0);
+    layout->addRow("Bus:", m_busSpin);
+
+    m_deviceSpin = new QSpinBox();
+    m_deviceSpin->setRange(0, 255);
+    m_deviceSpin->setValue(0);
+    layout->addRow("Device:", m_deviceSpin);
+
+    auto *infoLabel = new QLabel("Select USB devices to redirect from the host.\n\nNote: SPICE protocol required for USB redirection.");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #666; margin-top: 10px;");
+    layout->addRow(infoLabel);
+}
+
+Device* USBRedirDevicePage::createDevice()
+{
+    auto *usbRedir = new USBRedirDevice();
+    usbRedir->setBus(m_busSpin->value());
+    usbRedir->setPort(m_deviceSpin->value());
+    return usbRedir;
+}
+
+bool USBRedirDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// VSOCKDevicePage
+//=============================================================================
+
+VSOCKDevicePage::VSOCKDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void VSOCKDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_autoCIDCheck = new QCheckBox("Auto-assign CID");
+    m_autoCIDCheck->setChecked(true);
+    layout->addRow(m_autoCIDCheck);
+
+    m_cidSpin = new QSpinBox();
+    m_cidSpin->setRange(0, UINT32_MAX);
+    m_cidSpin->setValue(0);
+    m_cidSpin->setEnabled(false);
+    layout->addRow("Context ID:", m_cidSpin);
+
+    connect(m_autoCIDCheck, &QCheckBox::toggled, m_cidSpin, [this](bool checked) {
+        m_cidSpin->setEnabled(!checked);
+    });
+
+    auto *infoLabel = new QLabel("VSOCK provides socket communication between host and guest.\n\nNote: virtio-vsock device required.");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #666; margin-top: 10px;");
+    layout->addRow(infoLabel);
+}
+
+Device* VSOCKDevicePage::createDevice()
+{
+    auto *vsock = new VSockDevice();
+    if (m_autoCIDCheck->isChecked()) {
+        vsock->setCidAssignment(VSockDevice::CIDAssignment::Auto);
+    } else {
+        vsock->setCidAssignment(VSockDevice::CIDAssignment::Manual);
+        vsock->setCid(m_cidSpin->value());
+    }
+    return vsock;
+}
+
+bool VSOCKDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// PanicDevicePage
+//=============================================================================
+
+PanicDevicePage::PanicDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void PanicDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_modelCombo = new QComboBox();
+    m_modelCombo->addItem("ISA", static_cast<int>(PanicDevice::PanicModel::ISA));
+    m_modelCombo->addItem("pseries", static_cast<int>(PanicDevice::PanicModel::PSpics));
+    m_modelCombo->addItem("pvpanic", static_cast<int>(PanicDevice::PanicModel::PVPanel));
+    m_modelCombo->addItem("s390", static_cast<int>(PanicDevice::PanicModel::S390));
+    layout->addRow("Model:", m_modelCombo);
+
+    auto *infoLabel = new QLabel("Panic devices notify the host when the guest panics.\n\nUseful for VM monitoring and crash detection.");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #666; margin-top: 10px;");
+    layout->addRow(infoLabel);
+}
+
+Device* PanicDevicePage::createDevice()
+{
+    auto *panic = new PanicDevice();
+    panic->setModel(static_cast<PanicDevice::PanicModel>(m_modelCombo->currentData().toInt()));
+    return panic;
+}
+
+bool PanicDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// SerialDevicePage
+//=============================================================================
+
+SerialDevicePage::SerialDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void SerialDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_typeCombo = new QComboBox();
+    m_typeCombo->addItem("PTY", "pty");
+    m_typeCombo->addItem("TCP", "tcp");
+    m_typeCombo->addItem("UDP", "udp");
+    m_typeCombo->addItem("Unix Socket", "unix");
+    m_typeCombo->addItem("SpiceVMC", "spicevmc");
+    m_typeCombo->addItem("SpicePort", "spiceport");
+    layout->addRow("Type:", m_typeCombo);
+
+    m_pathEdit = new QLineEdit();
+    m_pathEdit->setPlaceholderText("/dev/pts/X or path");
+    layout->addRow("Path:", m_pathEdit);
+
+    m_portSpin = new QSpinBox();
+    m_portSpin->setRange(1, 65535);
+    m_portSpin->setValue(2222);
+    layout->addRow("Port:", m_portSpin);
+
+    auto *infoLabel = new QLabel("Serial console provides text-based access to the VM.\n\nConnect via: virsh console <domain>");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #666; margin-top: 10px;");
+    layout->addRow(infoLabel);
+}
+
+Device* SerialDevicePage::createDevice()
+{
+    auto *serial = new SerialDevice();
+    QString type = m_typeCombo->currentText();
+    if (type == "PTY") {
+        serial->setCharDeviceType(SerialDevice::CharDeviceType::PTY);
+    } else if (type == "TCP") {
+        serial->setCharDeviceType(SerialDevice::CharDeviceType::TCP);
+    } else if (type == "UDP") {
+        serial->setCharDeviceType(SerialDevice::CharDeviceType::UDP);
+    } else if (type == "Unix Socket") {
+        serial->setCharDeviceType(SerialDevice::CharDeviceType::Unix);
+    } else if (type == "SpiceVMC") {
+        serial->setCharDeviceType(SerialDevice::CharDeviceType::SpiceVMC);
+    } else if (type == "SpicePort") {
+        serial->setCharDeviceType(SerialDevice::CharDeviceType::SpicePort);
+    }
+    if (!m_pathEdit->text().isEmpty()) {
+        serial->setSourcePath(m_pathEdit->text());
+    }
+    return serial;
+}
+
+bool SerialDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// ParallelDevicePage
+//=============================================================================
+
+ParallelDevicePage::ParallelDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void ParallelDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_typeCombo = new QComboBox();
+    m_typeCombo->addItem("User", "user");
+    m_typeCombo->addItem("Host", "host");
+    m_typeCombo->addItem("TCP", "tcp");
+    layout->addRow("Type:", m_typeCombo);
+
+    m_pathEdit = new QLineEdit();
+    m_pathEdit->setPlaceholderText("/dev/parportX");
+    layout->addRow("Path:", m_pathEdit);
+
+    auto *infoLabel = new QLabel("Parallel port for legacy printer support.");
+    infoLabel->setWordWrap(true);
+    layout->addRow(infoLabel);
+}
+
+Device* ParallelDevicePage::createDevice()
+{
+    auto *parallel = new ParallelDevice();
+    return parallel;
+}
+
+bool ParallelDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// IOMMUDevicePage
+//=============================================================================
+
+IOMMUDevicePage::IOMMUDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void IOMMUDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_modelCombo = new QComboBox();
+    m_modelCombo->addItem("Intel VT-d", "intel");
+    m_modelCombo->addItem("AMD-Vi", "amd");
+    m_modelCombo->addItem("ARM SMMU", "arm");
+    layout->addRow("Model:", m_modelCombo);
+
+    auto *infoLabel = new QLabel("IOMMU device for DMA remapping and device passthrough.\n\nRequired for VFIO PCI passthrough.");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #666; margin-top: 10px;");
+    layout->addRow(infoLabel);
+}
+
+Device* IOMMUDevicePage::createDevice()
+{
+    auto *iommu = new IOMMUDevice();
+    QString model = m_modelCombo->currentText();
+    if (model == "Intel VT-d") {
+        iommu->setModel(IOMMUDevice::IOMMUModel::Intel);
+    } else if (model == "AMD-Vi") {
+        iommu->setModel(IOMMUDevice::IOMMUModel::AMD);
+    } else if (model == "ARM SMMU") {
+        iommu->setModel(IOMMUDevice::IOMMUModel::SMMUV3);
+    }
+    return iommu;
+}
+
+bool IOMMUDevicePage::validate()
+{
+    return true;
+}
+
+//=============================================================================
+// ChannelDevicePage
+//=============================================================================
+
+ChannelDevicePage::ChannelDevicePage(QWidget *parent)
+    : DeviceConfigPage(parent)
+{
+    setupUI();
+}
+
+void ChannelDevicePage::setupUI()
+{
+    auto *layout = new QFormLayout(this);
+
+    m_typeCombo = new QComboBox();
+    m_typeCombo->addItem("virtio-serial", "virtio");
+    m_typeCombo->addItem("SpiceVMC", "spicevmc");
+    m_typeCombo->addItem("SpicePort", "spiceport");
+    m_typeCombo->addItem("Unix Socket", "unix");
+    layout->addRow("Type:", m_typeCombo);
+
+    m_nameEdit = new QLineEdit();
+    m_nameEdit->setPlaceholderText("org.qemu.guest_agent.0");
+    layout->addRow("Name:", m_nameEdit);
+
+    m_pathEdit = new QLineEdit();
+    m_pathEdit->setPlaceholderText("/path/to/socket");
+    layout->addRow("Path:", m_pathEdit);
+
+    auto *infoLabel = new QLabel("Channel devices provide communication between host and guest.\n\nCommon: org.qemu.guest_agent.0 for QEMU guest agent.");
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("color: #666; margin-top: 10px;");
+    layout->addRow(infoLabel);
+}
+
+Device* ChannelDevicePage::createDevice()
+{
+    auto *channel = new ChannelDevice();
+    QString type = m_typeCombo->currentText();
+    if (type == "virtio-serial") {
+        channel->setChannelType(ChannelDevice::ChannelType::VirtioSerial);
+    } else if (type == "Unix Socket") {
+        channel->setChannelType(ChannelDevice::ChannelType::Unix);
+    }
+    if (!m_nameEdit->text().isEmpty()) {
+        channel->setTargetName(m_nameEdit->text());
+    }
+    if (!m_pathEdit->text().isEmpty()) {
+        channel->setSourcePath(m_pathEdit->text());
+    }
+    return channel;
+}
+
+bool ChannelDevicePage::validate()
 {
     return true;
 }

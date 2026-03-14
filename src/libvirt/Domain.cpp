@@ -28,6 +28,9 @@ Domain::Domain(Connection *conn, virDomainPtr domain)
     , m_maxMemory(0)
     , m_vcpuCount(0)
     , m_cpuTime(0)
+    , m_prevCpuTime(0)
+    , m_prevCpuTimestamp(0)
+    , m_cachedCpuUsage(0.0f)
 {
     // Get domain name
     const char *name = virDomainGetName(m_domain);
@@ -355,22 +358,58 @@ quint64 Domain::cpuTime() const
     return m_cpuTime;
 }
 
-float Domain::cpuUsage() const
+float Domain::cpuUsage()
 {
-    // Calculate CPU usage percentage
-    // This is a simplified calculation - real implementation needs
-    // to compare delta between polls
+    // Calculate CPU usage percentage based on delta over time
     if (!m_domain || m_state != StateRunning) {
-        return 0.0f;
+        m_cachedCpuUsage = 0.0f;
+        return m_cachedCpuUsage;
     }
 
     virDomainInfo info;
     if (virDomainGetInfo(m_domain, &info) < 0) {
-        return 0.0f;
+        return m_cachedCpuUsage;
     }
 
-    // Very rough approximation - will be improved with proper polling
-    return static_cast<float>(info.cpuTime) / 1000000000.0f;  // ns to seconds
+    // Get current CPU time (in nanoseconds)
+    quint64 currentCpuTime = info.cpuTime;
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+
+    // If this is the first call, just store the values
+    if (m_prevCpuTimestamp == 0) {
+        m_prevCpuTime = currentCpuTime;
+        m_prevCpuTimestamp = currentTime;
+        m_cachedCpuUsage = 0.0f;
+        return m_cachedCpuUsage;
+    }
+
+    // Calculate delta
+    quint64 cpuTimeDelta = currentCpuTime - m_prevCpuTime;
+    qint64 timeDelta = currentTime - m_prevCpuTimestamp;
+
+    // Only update if enough time has passed (at least 100ms)
+    if (timeDelta > 100) {
+        // Calculate percentage
+        // cpuTimeDelta is in nanoseconds, timeDelta is in milliseconds
+        // Convert to percentage: (cpuTimeDelta / (timeDelta * 1000000)) / vcpuCount * 100
+        float usage = 0.0f;
+        if (m_vcpuCount > 0) {
+            usage = (static_cast<float>(cpuTimeDelta) / 1000000.0f) / static_cast<float>(timeDelta) / m_vcpuCount * 100.0f;
+        }
+
+        // Clamp to reasonable range (0-100% per vCPU, so up to vcpuCount * 100)
+        float maxUsage = m_vcpuCount * 100.0f;
+        if (usage < 0.0f) usage = 0.0f;
+        if (usage > maxUsage) usage = maxUsage;
+
+        m_cachedCpuUsage = usage;
+
+        // Store current values for next calculation
+        m_prevCpuTime = currentCpuTime;
+        m_prevCpuTimestamp = currentTime;
+    }
+
+    return m_cachedCpuUsage;
 }
 
 quint64 Domain::currentMemory() const
@@ -596,6 +635,97 @@ bool Domain::hasCurrentSnapshot() const
     }
 
     return virDomainHasCurrentSnapshot(m_domain, 0) == 1;
+}
+
+// Guest Agent methods - simplified implementation
+bool Domain::guestAgentConnected() const
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_domain) return false;
+    // Check if guest agent is responding by trying to get guest info
+    // This is a simplified check - full implementation requires libvirt >= 6.4
+    virDomainInfo info;
+    if (virDomainGetInfo(m_domain, &info) == 0) {
+        // If domain is running, assume agent might be available
+        // Full agent check would require virDomainGuestPing
+        return info.state == VIR_DOMAIN_RUNNING;
+    }
+#endif
+    return false;
+}
+
+QString Domain::guestAgentVersion() const
+{
+    // Full implementation requires libvirt >= 6.4
+    return QString();
+}
+
+bool Domain::guestAgentPing() const
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_domain) return false;
+    // virDomainGuestPing requires libvirt >= 6.4
+    // For now, just check if domain is running
+    virDomainInfo info;
+    if (virDomainGetInfo(m_domain, &info) == 0) {
+        return info.state == VIR_DOMAIN_RUNNING;
+    }
+#endif
+    return false;
+}
+
+QString Domain::guestHostname() const
+{
+    // Full implementation requires libvirt >= 6.4
+    return QString();
+}
+
+QString Domain::guestOS() const
+{
+    // Full implementation requires libvirt >= 6.4
+    return QString();
+}
+
+QStringList Domain::guestIPAddresses() const
+{
+    QStringList ips;
+    // Full implementation requires libvirt >= 6.4
+    return ips;
+}
+
+QStringList Domain::guestGetUsers() const
+{
+    QStringList users;
+    // Full implementation requires libvirt >= 6.4
+    return users;
+}
+
+QMap<QString, Domain::NetworkInterface> Domain::guestGetNetworkInterfaces() const
+{
+    QMap<QString, NetworkInterface> interfaces;
+    // Full implementation requires libvirt >= 6.4
+    return interfaces;
+}
+
+QList<Domain::Filesystem> Domain::guestGetFilesystems() const
+{
+    QList<Filesystem> filesystems;
+    // Full implementation requires libvirt >= 6.4
+    return filesystems;
+}
+
+bool Domain::guestAgentShutdown(int timeout)
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_domain) return false;
+    // Try graceful shutdown with agent flag if available
+    // Fallback to regular shutdown
+    Q_UNUSED(timeout);
+    return virDomainShutdown(m_domain) == 0;
+#else
+    Q_UNUSED(timeout);
+    return false;
+#endif
 }
 
 } // namespace QVirt

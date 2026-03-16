@@ -92,8 +92,12 @@ void DetailsPage::setupUI()
     // Add panels to splitter
     m_splitter->addWidget(leftPanel);
     m_splitter->addWidget(rightPanel);
-    m_splitter->setStretchFactor(0, 1);
-    m_splitter->setStretchFactor(1, 2);
+    m_splitter->setStretchFactor(0, 3);
+    m_splitter->setStretchFactor(1, 1);
+
+    // Set a maximum width for the right panel to make it smaller
+    rightPanel->setMaximumWidth(400);
+    rightPanel->setMinimumWidth(200);
 
     mainLayout->addWidget(m_splitter);
 }

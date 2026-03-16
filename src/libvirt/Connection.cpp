@@ -84,6 +84,9 @@ Connection::Connection(const QString &uri)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_lastCPUTime(0)
+    , m_lastIdleTime(0)
+    , m_lastCPUUsage(0)
 {
     // Attempt to open the connection (no auth)
     m_conn = virConnectOpen(uri.toUtf8().constData());
@@ -108,6 +111,9 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_initialPoll(true)
     , m_pollingEnabled(true)
     , m_sshKeyPath(sshKeyPath)
+    , m_lastCPUTime(0)
+    , m_lastIdleTime(0)
+    , m_lastCPUUsage(0)
 {
 #ifdef LIBVIRT_FOUND
     // Set up authentication data
@@ -433,6 +439,158 @@ QString Connection::libvirtVersion() const
     }
 
     return "Libvirt (unknown version)";
+}
+
+int Connection::getHostCPUUsage()
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_conn) {
+        return 0;
+    }
+
+    // Get CPU stats for all CPUs (-1 means all CPUs)
+    int nparams = 0;
+    if (virNodeGetCPUStats(m_conn, -1, nullptr, &nparams, 0) < 0 || nparams <= 0) {
+        return 0;
+    }
+
+    virNodeCPUStats *params = new virNodeCPUStats[nparams];
+    memset(params, 0, sizeof(virNodeCPUStats) * nparams);
+    
+    if (virNodeGetCPUStats(m_conn, -1, params, &nparams, 0) < 0) {
+        delete[] params;
+        return 0;
+    }
+
+    // Calculate total CPU time and idle time
+    // Fields from libvirt: kernel, user, idle, iowait
+    unsigned long long totalTime = 0;
+    unsigned long long idleTime = 0;
+    unsigned long long userTime = 0;
+    unsigned long long kernelTime = 0;
+    unsigned long long iowaitTime = 0;
+
+    for (int i = 0; i < nparams; i++) {
+        if (strcmp(params[i].field, "idle") == 0) {
+            idleTime = params[i].value;
+        } else if (strcmp(params[i].field, "user") == 0) {
+            userTime = params[i].value;
+        } else if (strcmp(params[i].field, "kernel") == 0) {
+            kernelTime = params[i].value;
+        } else if (strcmp(params[i].field, "iowait") == 0) {
+            iowaitTime = params[i].value;
+        }
+    }
+
+    delete[] params;
+
+    // Calculate total time from all fields
+    totalTime = userTime + kernelTime + idleTime + iowaitTime;
+
+    // If we have cached values, calculate percentage
+    if (m_lastCPUTime > 0 && totalTime > m_lastCPUTime) {
+        unsigned long long totalDiff = totalTime - m_lastCPUTime;
+        unsigned long long idleDiff = idleTime - m_lastIdleTime;
+
+        if (totalDiff > 0) {
+            int usage = 100 - ((idleDiff * 100) / totalDiff);
+            if (usage < 0) usage = 0;
+            if (usage > 100) usage = 100;
+            m_lastCPUUsage = usage;
+        }
+    }
+
+    // Cache values for next calculation
+    m_lastCPUTime = totalTime;
+    m_lastIdleTime = idleTime;
+
+    return m_lastCPUUsage;
+#else
+    return 0;
+#endif
+}
+
+unsigned long long Connection::getHostMemoryTotal()
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_conn) {
+        return 0;
+    }
+
+    virNodeMemoryStats *params = nullptr;
+    int nparams = 0;
+
+    // First call to get number of parameters
+    if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, nullptr, &nparams, 0) < 0) {
+        return 0;
+    }
+
+    if (nparams <= 0) {
+        return 0;
+    }
+
+    params = new virNodeMemoryStats[nparams];
+    if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, params, &nparams, 0) < 0) {
+        delete[] params;
+        return 0;
+    }
+
+    unsigned long long total = 0;
+    for (int i = 0; i < nparams; i++) {
+        if (strcmp(params[i].field, "total") == 0) {
+            total = params[i].value;
+            break;
+        }
+    }
+
+    delete[] params;
+    return total;
+#else
+    return 0;
+#endif
+}
+
+unsigned long long Connection::getHostMemoryUsed()
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_conn) {
+        return 0;
+    }
+
+    virNodeMemoryStats *params = nullptr;
+    int nparams = 0;
+
+    // First call to get number of parameters
+    if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, nullptr, &nparams, 0) < 0) {
+        return 0;
+    }
+
+    if (nparams <= 0) {
+        return 0;
+    }
+
+    params = new virNodeMemoryStats[nparams];
+    if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, params, &nparams, 0) < 0) {
+        delete[] params;
+        return 0;
+    }
+
+    unsigned long long total = 0;
+    unsigned long long free = 0;
+
+    for (int i = 0; i < nparams; i++) {
+        if (strcmp(params[i].field, "total") == 0) {
+            total = params[i].value;
+        } else if (strcmp(params[i].field, "free") == 0) {
+            free = params[i].value;
+        }
+    }
+
+    delete[] params;
+    return (total > free) ? (total - free) : 0;
+#else
+    return 0;
+#endif
 }
 
 void Connection::tick()

@@ -215,6 +215,7 @@ target_link_libraries(qvirt-domain
 add_library(qvirt-ui
     ui/manager/ManagerWindow.cpp
     ui/models/ConnectionListModel.cpp
+    ui/models/ConnectionTreeModel.cpp
     ui/models/VMListModel.cpp
     ui/models/VMProxyModel.cpp
     ui/dialogs/ConnectionDialog.cpp
@@ -311,13 +312,6 @@ target_link_libraries(qvirt-manager
         Qt${QT_VERSION_MAJOR}::Xml
         Qt${QT_VERSION_MAJOR}::Network
 )
-
-if(LIBVIRT_FOUND)
-    target_link_libraries(qvirt-manager
-        PRIVATE
-            ${LIBVIRT_LIBRARIES}
-    )
-endif()
 
 # Install
 install(TARGETS qvirt-manager DESTINATION ${CMAKE_INSTALL_BINDIR})

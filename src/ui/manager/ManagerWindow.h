@@ -13,7 +13,7 @@
 #define QVIRT_UI_MANAGER_MANAGERWINDOW_H
 
 #include <QMainWindow>
-#include <QListView>
+#include <QTreeView>
 #include <QTableView>
 #include <QPushButton>
 #include <QLabel>
@@ -26,8 +26,7 @@
 #include <QMenuBar>
 
 #include "../../libvirt/Connection.h"
-#include "../models/ConnectionListModel.h"
-#include "../models/VMListModel.h"
+#include "../models/ConnectionTreeModel.h"
 #include "../widgets/ContextMenu.h"
 
 namespace QVirt {
@@ -38,8 +37,8 @@ class KeyboardShortcuts;
  * @brief Main manager window
  *
  * This is the main application window that displays:
- * - List of connections
- * - List of VMs with their states
+ * - Expandable tree of connections with VMs as children
+ * - VM list in the main area
  * - VM controls (start, stop, reboot, etc.)
  */
 class ManagerWindow : public QMainWindow
@@ -62,21 +61,21 @@ private slots:
     void onVMResume();
     void onNewVM();
     void onDeleteVM();
-    void onVMSelectionChanged();
-    void onConnectionSelectionChanged();
+    void onTreeSelectionChanged();
     void openConnectionDialog();
     void showPreferences();
     void showHostDetails();
     void showStoragePools();
     void showNetworks();
     void refresh();
-    void onConnectionContextMenu(const QPoint &pos);
+    void onTreeContextMenu(const QPoint &pos);
     void onConnectToConnection();
     void onDisconnectFromConnection();
     void onEditConnection();
     void onDeleteConnection();
     void openConsole();
     void onConnectionStateChanged(Connection::State state);
+    void onTreeItemDoubleClicked(const QModelIndex &index);
 
 private:
     void setupUI();
@@ -85,18 +84,15 @@ private:
     void connectSignals();
     void setupKeyboardShortcuts();
     void updateVMControls();
+    Connection* getCurrentConnection() const;
+    Domain* getCurrentDomain() const;
 
     // UI components
     QSplitter *m_splitter;
 
-    // Left panel (connections)
-    QTableView *m_connectionList;
-    ConnectionListModel *m_connectionModel;
-
-    // Right panel (VM list)
-    QTableView *m_vmList;
-    VMListModel *m_vmModel;
-    QLabel *m_vmListStatusLabel;
+    // Left panel (tree view with connections and VMs)
+    QTreeView *m_treeView;
+    ConnectionTreeModel *m_treeModel;
 
     // VM control buttons
     QPushButton *m_btnStart;

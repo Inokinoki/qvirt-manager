@@ -34,6 +34,14 @@ namespace QVirt {
 
 ManagerWindow::ManagerWindow(QWidget *parent)
     : QMainWindow(parent)
+    , m_actionNewVM(nullptr)
+    , m_actionDeleteVM(nullptr)
+    , m_actionStart(nullptr)
+    , m_actionStop(nullptr)
+    , m_actionReboot(nullptr)
+    , m_actionPause(nullptr)
+    , m_actionResume(nullptr)
+    , m_actionOpenConsole(nullptr)
 {
     setWindowTitle(tr("QVirt Manager"));
     resize(1024, 768);
@@ -50,7 +58,7 @@ ManagerWindow::ManagerWindow(QWidget *parent)
     for (const QString &uri : uris) {
         // Add to model as disconnected first
         bool autoconnect = config->connAutoconnect(uri);
-        m_connectionModel->addDisconnectedConnection(uri, autoconnect);
+        m_treeModel->addDisconnectedConnection(uri, autoconnect);
 
         // Try to auto-connect if configured
         if (autoconnect) {
@@ -80,135 +88,38 @@ void ManagerWindow::setupUI()
     setCentralWidget(centralWidget);
 
     QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
 
     m_splitter = new QSplitter(Qt::Horizontal, this);
 
-    // Left panel - Connection list
+    // Left panel - Tree view with connections and VMs
     QWidget *leftPanel = new QWidget();
     QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
-    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setContentsMargins(4, 4, 4, 4);
+    leftLayout->setSpacing(4);
 
-    QLabel *connLabel = new QLabel(tr("Connections"));
-    leftLayout->addWidget(connLabel);
+    m_treeModel = new ConnectionTreeModel(this);
+    m_treeView = new QTreeView();
+    m_treeView->setModel(m_treeModel);
+    m_treeView->setHeaderHidden(true);
+    m_treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_treeView->setAlternatingRowColors(false);
+    m_treeView->setAnimated(true);
+    m_treeView->setIndentation(20);
+    m_treeView->setRootIsDecorated(true);
+    m_treeView->setUniformRowHeights(true);
+    m_treeView->expandAll();
 
-    m_connectionModel = new ConnectionListModel(this);
-    m_connectionList = new QTableView();
-    m_connectionList->setModel(m_connectionModel);
-    m_connectionList->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_connectionList->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_connectionList->horizontalHeader()->setStretchLastSection(true);
-    m_connectionList->verticalHeader()->setVisible(false);
-    m_connectionList->setContextMenuPolicy(Qt::CustomContextMenu);
+    leftLayout->addWidget(m_treeView);
 
-    leftLayout->addWidget(m_connectionList);
-
-    QPushButton *btnAddConn = new QPushButton(tr("Add"));
+    QPushButton *btnAddConn = new QPushButton(tr("Add Connection"));
     connect(btnAddConn, &QPushButton::clicked, this, &ManagerWindow::openConnectionDialog);
     leftLayout->addWidget(btnAddConn);
 
     m_splitter->addWidget(leftPanel);
-
-    // Right panel - VM list with controls
-    QWidget *rightPanel = new QWidget();
-    QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
-
-    // VM list
-    QLabel *vmLabel = new QLabel(tr("Virtual Machines"));
-    rightLayout->addWidget(vmLabel);
-
-    m_vmModel = new VMListModel(this);
-    m_vmList = new QTableView();
-    m_vmList->setModel(m_vmModel);
-    m_vmList->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_vmList->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_vmList->setAlternatingRowColors(true);
-    m_vmList->setContextMenuPolicy(Qt::CustomContextMenu);
-    
-    // Configure table view for better display
-    m_vmList->setShowGrid(false);
-    m_vmList->setCornerButtonEnabled(false);
-    m_vmList->horizontalHeader()->setStretchLastSection(true);
-    m_vmList->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_vmList->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
-    m_vmList->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    m_vmList->verticalHeader()->setVisible(false);
-    m_vmList->setColumnWidth(1, 100);  // State
-    m_vmList->setColumnWidth(2, 120);  // Memory
-    connect(m_vmList, &QTableView::customContextMenuRequested,
-            this, [this](const QPoint &pos) {
-                Domain *domain = m_vmModel->domainAt(m_vmList->indexAt(pos).row());
-                if (domain) {
-                    VMContextMenu contextMenu(this);
-                    QMenu *menu = contextMenu.createMenu(this, domain);
-
-                    connect(&contextMenu, &VMContextMenu::startRequested, this, &ManagerWindow::onVMStarted);
-                    connect(&contextMenu, &VMContextMenu::stopRequested, this, &ManagerWindow::onVMStopped);
-                    connect(&contextMenu, &VMContextMenu::rebootRequested, this, &ManagerWindow::onVMRebooted);
-                    connect(&contextMenu, &VMContextMenu::pauseRequested, this, &ManagerWindow::onVMPaused);
-                    connect(&contextMenu, &VMContextMenu::deleteRequested, this, &ManagerWindow::onDeleteVM);
-                    connect(&contextMenu, &VMContextMenu::openConsoleRequested, this, [this]() {
-                        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
-                        if (domain) {
-                            auto *vmWindow = new VMWindow(domain, this);
-                            vmWindow->show();
-                        }
-                    });
-                    connect(&contextMenu, &VMContextMenu::viewDetailsRequested, this, [this]() {
-                        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
-                        if (domain) {
-                            auto *vmWindow = new VMWindow(domain, this);
-                            vmWindow->show();
-                        }
-                    });
-
-                    menu->exec(m_vmList->viewport()->mapToGlobal(pos));
-                    delete menu;
-                }
-            });
-
-    rightLayout->addWidget(m_vmList);
-
-    // Connection status label (shown when connecting)
-    m_vmListStatusLabel = new QLabel();
-    m_vmListStatusLabel->setAlignment(Qt::AlignCenter);
-    m_vmListStatusLabel->setStyleSheet("color: gray; font-style: italic;");
-    m_vmListStatusLabel->hide();
-    rightLayout->addWidget(m_vmListStatusLabel);
-
-    // VM control buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-
-    m_btnNewVM = new QPushButton(tr("New VM"));
-    m_btnNewVM->setIcon(style()->standardIcon(QStyle::SP_FileIcon));
-    m_btnStart = new QPushButton(tr("Start"));
-    m_btnStart->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    m_btnStop = new QPushButton(tr("Stop"));
-    m_btnStop->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
-    m_btnReboot = new QPushButton(tr("Reboot"));
-    m_btnPause = new QPushButton(tr("Pause"));
-    m_btnPause->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
-    m_btnResume = new QPushButton(tr("Resume"));
-    m_btnResume->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    m_btnDeleteVM = new QPushButton(tr("Delete"));
-    m_btnDeleteVM->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
-    m_btnOpenConsole = new QPushButton(tr("Console"));
-    m_btnOpenConsole->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
-
-    buttonLayout->addWidget(m_btnNewVM);
-    buttonLayout->addWidget(m_btnStart);
-    buttonLayout->addWidget(m_btnStop);
-    buttonLayout->addWidget(m_btnReboot);
-    buttonLayout->addWidget(m_btnPause);
-    buttonLayout->addWidget(m_btnResume);
-    buttonLayout->addWidget(m_btnOpenConsole);
-    buttonLayout->addWidget(m_btnDeleteVM);
-    buttonLayout->addStretch();
-
-    rightLayout->addLayout(buttonLayout);
-
-    m_splitter->addWidget(rightPanel);
     m_splitter->setStretchFactor(0, 1);
-    m_splitter->setStretchFactor(1, 3);
 
     mainLayout->addWidget(m_splitter);
 
@@ -224,45 +135,47 @@ void ManagerWindow::setupUI()
 
 void ManagerWindow::setupToolbar()
 {
-    QToolBar *toolbar = addToolBar(tr("Main Toolbar"));
+    QToolBar *toolbar = addToolBar(tr("VM Controls"));
     toolbar->setMovable(false);
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
     m_actionNewVM = new QAction(tr("New VM"), this);
-    m_actionNewVM->setIcon(style()->standardIcon(QStyle::SP_FileIcon));
+    m_actionNewVM->setIcon(QIcon::fromTheme("document-new", style()->standardIcon(QStyle::SP_FileIcon)));
     m_actionNewVM->setShortcut(QKeySequence::New);
     toolbar->addAction(m_actionNewVM);
 
     toolbar->addSeparator();
 
     m_actionStart = new QAction(tr("Start"), this);
-    m_actionStart->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    m_actionStart->setIcon(QIcon::fromTheme("media-playback-start", style()->standardIcon(QStyle::SP_MediaPlay)));
     toolbar->addAction(m_actionStart);
 
     m_actionStop = new QAction(tr("Stop"), this);
-    m_actionStop->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
+    m_actionStop->setIcon(QIcon::fromTheme("media-playback-stop", style()->standardIcon(QStyle::SP_MediaStop)));
     toolbar->addAction(m_actionStop);
 
     m_actionReboot = new QAction(tr("Reboot"), this);
+    m_actionReboot->setIcon(QIcon::fromTheme("view-refresh", style()->standardIcon(QStyle::SP_BrowserReload)));
     toolbar->addAction(m_actionReboot);
 
     m_actionPause = new QAction(tr("Pause"), this);
-    m_actionPause->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+    m_actionPause->setIcon(QIcon::fromTheme("media-playback-pause", style()->standardIcon(QStyle::SP_MediaPause)));
     toolbar->addAction(m_actionPause);
 
     m_actionResume = new QAction(tr("Resume"), this);
-    m_actionResume->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    m_actionResume->setIcon(QIcon::fromTheme("media-playback-start", style()->standardIcon(QStyle::SP_MediaPlay)));
     toolbar->addAction(m_actionResume);
 
     toolbar->addSeparator();
 
-    m_actionOpenConsole = new QAction(tr("Open Console"), this);
-    m_actionOpenConsole->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
+    m_actionOpenConsole = new QAction(tr("Console"), this);
+    m_actionOpenConsole->setIcon(QIcon::fromTheme("utilities-terminal", style()->standardIcon(QStyle::SP_ComputerIcon)));
     toolbar->addAction(m_actionOpenConsole);
 
     toolbar->addSeparator();
 
     m_actionDeleteVM = new QAction(tr("Delete"), this);
-    m_actionDeleteVM->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+    m_actionDeleteVM->setIcon(QIcon::fromTheme("edit-delete", style()->standardIcon(QStyle::SP_TrashIcon)));
     toolbar->addAction(m_actionDeleteVM);
 }
 
@@ -344,44 +257,17 @@ void ManagerWindow::setupMenus()
 
 void ManagerWindow::connectSignals()
 {
-    // VM list selection
-    connect(m_vmList->selectionModel(), &QItemSelectionModel::selectionChanged,
-            this, &ManagerWindow::onVMSelectionChanged);
+    // Tree view selection
+    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &ManagerWindow::onTreeSelectionChanged);
 
-    // Connection list selection
-    connect(m_connectionList->selectionModel(), &QItemSelectionModel::selectionChanged,
-            this, &ManagerWindow::onConnectionSelectionChanged);
+    // Tree view context menu
+    connect(m_treeView, &QTreeView::customContextMenuRequested,
+            this, &ManagerWindow::onTreeContextMenu);
 
-    // Connection list context menu
-    connect(m_connectionList, &QTableView::customContextMenuRequested,
-            this, &ManagerWindow::onConnectionContextMenu);
-
-    // Button connections
-    connect(m_btnNewVM, &QPushButton::clicked, this, &ManagerWindow::onNewVM);
-    connect(m_btnStart, &QPushButton::clicked, this, &ManagerWindow::onVMStarted);
-    connect(m_btnStop, &QPushButton::clicked, this, &ManagerWindow::onVMStopped);
-    connect(m_btnReboot, &QPushButton::clicked, this, &ManagerWindow::onVMRebooted);
-    connect(m_btnPause, &QPushButton::clicked, this, &ManagerWindow::onVMPaused);
-    connect(m_btnResume, &QPushButton::clicked, this, &ManagerWindow::onVMResume);
-    connect(m_btnDeleteVM, &QPushButton::clicked, this, &ManagerWindow::onDeleteVM);
-    connect(m_btnOpenConsole, &QPushButton::clicked, [this]() {
-        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
-        if (!domain) {
-            return;
-        }
-        auto *vmWindow = new VMWindow(domain, this);
-        vmWindow->show();
-    });
-
-    // VM list double-click to open details
-    connect(m_vmList, &QTableView::doubleClicked, [this](const QModelIndex &index) {
-        Domain *domain = m_vmModel->domainAt(index.row());
-        if (!domain) {
-            return;
-        }
-        auto *vmWindow = new VMWindow(domain, this);
-        vmWindow->show();
-    });
+    // Tree view double click
+    connect(m_treeView, &QTreeView::doubleClicked,
+            this, &ManagerWindow::onTreeItemDoubleClicked);
 
     // Toolbar actions
     connect(m_actionNewVM, &QAction::triggered, this, &ManagerWindow::onNewVM);
@@ -391,15 +277,51 @@ void ManagerWindow::connectSignals()
     connect(m_actionPause, &QAction::triggered, this, &ManagerWindow::onVMPaused);
     connect(m_actionResume, &QAction::triggered, this, &ManagerWindow::onVMResume);
     connect(m_actionDeleteVM, &QAction::triggered, this, &ManagerWindow::onDeleteVM);
-    connect(m_actionOpenConsole, &QAction::triggered, [this]() {
-        Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    connect(m_actionOpenConsole, &QAction::triggered, this, [this]() {
+        Domain *domain = getCurrentDomain();
         if (!domain) {
             return;
         }
-        // Open VM details window
         auto *vmWindow = new VMWindow(domain, this);
         vmWindow->show();
     });
+}
+
+Connection* ManagerWindow::getCurrentConnection() const
+{
+    QModelIndex index = m_treeView->currentIndex();
+    if (!index.isValid()) {
+        return nullptr;
+    }
+
+    // Check if it's a connection or a VM
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item) {
+        return nullptr;
+    }
+
+    if (item->type() == TreeItem::ConnectionItem) {
+        return item->connection();
+    } else if (item->type() == TreeItem::VMItem && item->domain()) {
+        return item->domain()->connection();
+    }
+
+    return nullptr;
+}
+
+Domain* ManagerWindow::getCurrentDomain() const
+{
+    QModelIndex index = m_treeView->currentIndex();
+    if (!index.isValid()) {
+        return nullptr;
+    }
+
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item || item->type() != TreeItem::VMItem) {
+        return nullptr;
+    }
+
+    return item->domain();
 }
 
 void ManagerWindow::addConnection(Connection *conn)
@@ -411,8 +333,7 @@ void ManagerWindow::addConnection(Connection *conn)
     // Register connection with Engine so it gets tick() calls
     Engine::instance()->registerConnection(conn);
 
-    m_connectionModel->addConnection(conn);
-    m_vmModel->addConnection(conn);
+    m_treeModel->addConnection(conn);
 
     // Automatically persist SSH credentials for remote connections
     Config *config = Config::instance();
@@ -431,12 +352,10 @@ void ManagerWindow::addConnection(Connection *conn)
     m_statusLabel->setText(tr("Connected to: %1").arg(conn->uri()));
     updateVMControls();
 
-    // Auto-select the newly added connection
-    int rowCount = m_connectionModel->rowCount();
-    if (rowCount > 0) {
-        QModelIndex lastIndex = m_connectionModel->index(rowCount - 1, 0);
-        m_connectionList->selectRow(lastIndex.row());
-        // selectRow() will trigger onConnectionSelectionChanged() via the signal/slot connection
+    // Auto-expand the connection to show VMs
+    QModelIndex connIndex = m_treeModel->connectionIndex(conn);
+    if (connIndex.isValid()) {
+        m_treeView->expand(connIndex);
     }
 }
 
@@ -451,11 +370,10 @@ void ManagerWindow::removeConnection(Connection *conn)
     // Unregister connection from Engine
     Engine::instance()->unregisterConnection(conn);
 
-    m_connectionModel->removeConnection(conn);
-    m_vmModel->removeConnection(conn);
+    m_treeModel->removeConnection(conn);
 
     // Add back as disconnected so it remains in the sidebar
-    m_connectionModel->addDisconnectedConnection(uri, false);
+    m_treeModel->addDisconnectedConnection(uri, false);
 
     m_statusLabel->setText(tr("Disconnected from: %1").arg(uri));
     updateVMControls();
@@ -468,7 +386,7 @@ void ManagerWindow::onConnectionAdded()
 
 void ManagerWindow::onVMStarted()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -480,7 +398,7 @@ void ManagerWindow::onVMStarted()
 
 void ManagerWindow::onVMStopped()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -492,7 +410,7 @@ void ManagerWindow::onVMStopped()
 
 void ManagerWindow::onVMRebooted()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -504,7 +422,7 @@ void ManagerWindow::onVMRebooted()
 
 void ManagerWindow::onVMPaused()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -515,7 +433,7 @@ void ManagerWindow::onVMPaused()
 
 void ManagerWindow::onVMResume()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -527,20 +445,22 @@ void ManagerWindow::onVMResume()
 void ManagerWindow::onNewVM()
 {
     // Get the selected connection
-    QModelIndex connIndex = m_connectionList->currentIndex();
-    if (!connIndex.isValid()) {
+    Connection *conn = getCurrentConnection();
+    if (!conn) {
         // Try to get the first available connection
-        if (m_connectionModel->rowCount() > 0) {
-            connIndex = m_connectionModel->index(0, 0);
-            m_connectionList->setCurrentIndex(connIndex);
-        } else {
+        if (m_treeModel->rowCount() > 0) {
+            QModelIndex firstIndex = m_treeModel->index(0, 0, QModelIndex());
+            m_treeView->setCurrentIndex(firstIndex);
+            conn = getCurrentConnection();
+        }
+        
+        if (!conn) {
             QMessageBox::warning(this, tr("No Connection Available"),
                 tr("Please add a connection first."));
             return;
         }
     }
 
-    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
     if (!conn) {
         QMessageBox::warning(this, tr("Connection Error"),
             tr("Failed to get connection."));
@@ -560,7 +480,7 @@ void ManagerWindow::onNewVM()
 
     connect(wizard, &QWizard::accepted, this, [this]() {
         m_statusLabel->setText(tr("VM created successfully"));
-        m_vmModel->refresh();
+        m_treeModel->refresh();
     });
 
     int result = wizard->exec();  // Use exec() for modal dialog
@@ -569,13 +489,13 @@ void ManagerWindow::onNewVM()
     conn->setPollingEnabled(true);
     
     if (result == QDialog::Accepted) {
-        m_vmModel->refresh();
+        m_treeModel->refresh();
     }
 }
 
 void ManagerWindow::onDeleteVM()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -614,48 +534,60 @@ void ManagerWindow::onDeleteVM()
     }
 }
 
-void ManagerWindow::onVMSelectionChanged()
-{
-    updateVMControls();
-}
 
-void ManagerWindow::onConnectionSelectionChanged()
+
+void ManagerWindow::onTreeSelectionChanged()
 {
-    QModelIndex connIndex = m_connectionList->currentIndex();
-    if (!connIndex.isValid()) {
-        // No connection selected, clear VM list
-        m_vmModel->setConnection(nullptr);
+    QModelIndex index = m_treeView->currentIndex();
+    if (!index.isValid()) {
+        // No selection
         m_statusLabel->setText(tr("No connection selected"));
         updateVMControls();
         return;
     }
 
-    // Get the connection for the selected row
-    // First try active connections, then check disconnected ones
-    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
-    if (!conn) {
-        // Check if it's a disconnected connection
-        ConnectionInfo *info = m_connectionModel->connectionInfoAt(connIndex.row());
-        if (info) {
-            m_statusLabel->setText(tr("Disconnected: %1").arg(info->uri));
-            m_vmModel->setConnection(nullptr);
-            updateVMControls();
-            return;
-        }
-        // Fallback - try to get by URI
-        QString uri = m_connectionModel->data(connIndex, ConnectionListModel::URIRole).toString();
-        conn = m_connectionModel->connectionByURI(uri);
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item) {
+        m_statusLabel->setText(tr("No valid selection"));
+        updateVMControls();
+        return;
     }
 
-    if (conn) {
-        m_vmModel->setConnection(conn);
-        m_statusLabel->setText(tr("Connected to: %1").arg(conn->uri()));
-    } else {
-        m_vmModel->setConnection(nullptr);
-        m_statusLabel->setText(tr("No valid connection"));
+    if (item->type() == TreeItem::ConnectionItem) {
+        // Selected a connection
+        Connection *conn = item->connection();
+        if (conn) {
+            m_statusLabel->setText(tr("Connected to: %1").arg(conn->uri()));
+        } else if (item->connectionInfo()) {
+            m_statusLabel->setText(tr("Disconnected: %1").arg(item->connectionInfo()->uri));
+        }
+    } else if (item->type() == TreeItem::VMItem && item->domain()) {
+        // Selected a VM
+        m_statusLabel->setText(tr("VM: %1").arg(item->domain()->name()));
     }
 
     updateVMControls();
+}
+
+void ManagerWindow::onTreeItemDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return;
+    }
+
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item) {
+        return;
+    }
+
+    if (item->type() == TreeItem::VMItem && item->domain()) {
+        // Open VM window
+        auto *vmWindow = new VMWindow(item->domain(), this);
+        vmWindow->show();
+    } else if (item->type() == TreeItem::ConnectionItem && item->isDisconnected()) {
+        // Try to connect
+        onConnectToConnection();
+    }
 }
 
 void ManagerWindow::openConnectionDialog()
@@ -690,15 +622,10 @@ void ManagerWindow::showPreferences()
 void ManagerWindow::showHostDetails()
 {
     // Get selected connection
-    QModelIndex connIndex = m_connectionList->currentIndex();
-    if (!connIndex.isValid()) {
+    Connection *conn = getCurrentConnection();
+    if (!conn) {
         QMessageBox::warning(this, tr("No Connection Selected"),
             tr("Please select a connection first."));
-        return;
-    }
-
-    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
-    if (!conn) {
         return;
     }
 
@@ -710,75 +637,59 @@ void ManagerWindow::showHostDetails()
 
 void ManagerWindow::updateVMControls()
 {
-    QModelIndex current = m_vmList->currentIndex();
-    Domain *domain = m_vmModel->domainAt(current.row());
+    // Check if a VM is selected in the tree
+    Domain *domain = getCurrentDomain();
 
     bool hasSelection = (domain != nullptr);
     Domain::State state = domain ? domain->state() : Domain::StateNoState;
 
-    // Enable buttons only when a VM is selected
-    m_btnStart->setEnabled(hasSelection);
-    m_btnStop->setEnabled(hasSelection);
-    m_btnReboot->setEnabled(hasSelection);
-    m_btnPause->setEnabled(hasSelection);
-    m_btnResume->setEnabled(hasSelection);
-    m_btnDeleteVM->setEnabled(hasSelection);
-    
-    // Console should be enabled for all VM states (user can at least view info)
-    m_btnOpenConsole->setEnabled(hasSelection);
+    // Calculate enabled states for toolbar actions
+    bool canStart = hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState);
+    bool canStop = hasSelection && (state == Domain::StateRunning || state == Domain::StateBlocked);
+    bool canReboot = hasSelection && (state == Domain::StateRunning);
+    bool canPause = hasSelection && (state == Domain::StateRunning);
+    bool canResume = hasSelection && (state == Domain::StatePaused);
+    bool canDelete = hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
+    bool canOpenConsole = hasSelection;
 
-    // Fine-tune button states based on VM state
-    if (hasSelection && domain) {
-        // Start - only when stopped/shutoff
-        m_btnStart->setEnabled(state == Domain::StateShutOff || state == Domain::StateNoState);
-        
-        // Stop - only when running/blocked
-        m_btnStop->setEnabled(state == Domain::StateRunning || state == Domain::StateBlocked);
-        
-        // Reboot - only when running
-        m_btnReboot->setEnabled(state == Domain::StateRunning);
-        
-        // Pause - only when running
-        m_btnPause->setEnabled(state == Domain::StateRunning);
-        
-        // Resume - only when paused
-        m_btnResume->setEnabled(state == Domain::StatePaused);
-        
-        // Delete - when stopped/shutoff or running (with confirmation)
-        m_btnDeleteVM->setEnabled(state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
+    // Update toolbar actions
+    if (m_actionStart) m_actionStart->setEnabled(canStart);
+    if (m_actionStop) m_actionStop->setEnabled(canStop);
+    if (m_actionReboot) m_actionReboot->setEnabled(canReboot);
+    if (m_actionPause) m_actionPause->setEnabled(canPause);
+    if (m_actionResume) m_actionResume->setEnabled(canResume);
+    if (m_actionDeleteVM) m_actionDeleteVM->setEnabled(canDelete);
+    if (m_actionOpenConsole) m_actionOpenConsole->setEnabled(canOpenConsole);
+
+    // Update VM count - count all VMs across all connections
+    int vmCount = 0;
+    Connection *currentConn = getCurrentConnection();
+    if (currentConn) {
+        vmCount = currentConn->domains().size();
     }
+    m_vmCountLabel->setText(tr("VMs: %1").arg(vmCount));
 
-    // Update actions to match buttons
-    m_actionStart->setEnabled(m_btnStart->isEnabled());
-    m_actionStop->setEnabled(m_btnStop->isEnabled());
-    m_actionReboot->setEnabled(m_btnReboot->isEnabled());
-    m_actionPause->setEnabled(m_btnPause->isEnabled());
-    m_actionResume->setEnabled(m_btnResume->isEnabled());
-    m_actionDeleteVM->setEnabled(m_btnDeleteVM->isEnabled());
-    m_actionOpenConsole->setEnabled(m_btnOpenConsole->isEnabled());
-
-    // Update VM count
-    m_vmCountLabel->setText(tr("VMs: %1").arg(m_vmModel->domains().count()));
+    // Update status bar with VM name and connection info
+    if (domain && currentConn) {
+        m_statusLabel->setText(tr("VM '%1' on %2").arg(domain->name()).arg(currentConn->uri()));
+    } else if (currentConn) {
+        m_statusLabel->setText(tr("Connected to: %1").arg(currentConn->uri()));
+    }
 }
 
 void ManagerWindow::refresh()
 {
-    m_vmModel->refresh();
+    m_treeModel->refresh();
     m_statusLabel->setText(tr("Refreshed"));
 }
 
 void ManagerWindow::showStoragePools()
 {
     // Get selected connection
-    QModelIndex connIndex = m_connectionList->currentIndex();
-    if (!connIndex.isValid()) {
+    Connection *conn = getCurrentConnection();
+    if (!conn) {
         QMessageBox::warning(this, tr("No Connection Selected"),
             tr("Please select a connection first."));
-        return;
-    }
-
-    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
-    if (!conn) {
         return;
     }
 
@@ -791,15 +702,10 @@ void ManagerWindow::showStoragePools()
 void ManagerWindow::showNetworks()
 {
     // Get selected connection
-    QModelIndex connIndex = m_connectionList->currentIndex();
-    if (!connIndex.isValid()) {
+    Connection *conn = getCurrentConnection();
+    if (!conn) {
         QMessageBox::warning(this, tr("No Connection Selected"),
             tr("Please select a connection first."));
-        return;
-    }
-
-    Connection *conn = m_connectionModel->connectionAt(connIndex.row());
-    if (!conn) {
         return;
     }
 
@@ -815,69 +721,90 @@ void ManagerWindow::setupKeyboardShortcuts()
     m_keyboardShortcuts->setupShortcuts(this);
 }
 
-void ManagerWindow::onConnectionContextMenu(const QPoint &pos)
+void ManagerWindow::onTreeContextMenu(const QPoint &pos)
 {
-    QModelIndex index = m_connectionList->indexAt(pos);
+    QModelIndex index = m_treeView->indexAt(pos);
     if (!index.isValid()) {
         return;
     }
 
-    int row = index.row();
-    Connection *conn = m_connectionModel->connectionAt(row);
-    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
-
-    QString uri;
-    bool isConnected = false;
-
-    if (conn) {
-        uri = conn->uri();
-        isConnected = (conn->state() == Connection::Active);
-    } else if (info) {
-        uri = info->uri;
-        isConnected = false;
-    } else {
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item) {
         return;
     }
 
     QMenu menu(this);
 
-    if (isConnected) {
-        QAction *disconnectAction = menu.addAction(tr("Disconnect"));
-        connect(disconnectAction, &QAction::triggered, this, &ManagerWindow::onDisconnectFromConnection);
-    } else {
-        QAction *connectAction = menu.addAction(tr("Connect"));
-        connect(connectAction, &QAction::triggered, this, &ManagerWindow::onConnectToConnection);
+    if (item->type() == TreeItem::ConnectionItem) {
+        // Connection context menu
+        Connection *conn = item->connection();
+        
+        QString uri = item->uri();
+        bool isConnected = (conn && conn->state() == Connection::Active);
+
+        if (isConnected) {
+            QAction *disconnectAction = menu.addAction(tr("Disconnect"));
+            connect(disconnectAction, &QAction::triggered, this, &ManagerWindow::onDisconnectFromConnection);
+        } else {
+            QAction *connectAction = menu.addAction(tr("Connect"));
+            connect(connectAction, &QAction::triggered, this, &ManagerWindow::onConnectToConnection);
+        }
+
+        menu.addSeparator();
+
+        QAction *editAction = menu.addAction(tr("Edit..."));
+        connect(editAction, &QAction::triggered, this, &ManagerWindow::onEditConnection);
+
+        QAction *deleteAction = menu.addAction(tr("Delete"));
+        deleteAction->setEnabled(true);
+        connect(deleteAction, &QAction::triggered, this, &ManagerWindow::onDeleteConnection);
+    } else if (item->type() == TreeItem::VMItem && item->domain()) {
+        // VM context menu from tree
+        VMContextMenu contextMenu(this);
+        QMenu *vmMenu = contextMenu.createMenu(this, item->domain());
+
+        connect(&contextMenu, &VMContextMenu::startRequested, this, &ManagerWindow::onVMStarted);
+        connect(&contextMenu, &VMContextMenu::stopRequested, this, &ManagerWindow::onVMStopped);
+        connect(&contextMenu, &VMContextMenu::rebootRequested, this, &ManagerWindow::onVMRebooted);
+        connect(&contextMenu, &VMContextMenu::pauseRequested, this, &ManagerWindow::onVMPaused);
+        connect(&contextMenu, &VMContextMenu::deleteRequested, this, &ManagerWindow::onDeleteVM);
+        connect(&contextMenu, &VMContextMenu::openConsoleRequested, this, [this]() {
+            Domain *domain = getCurrentDomain();
+            if (domain) {
+                auto *vmWindow = new VMWindow(domain, this);
+                vmWindow->show();
+            }
+        });
+        connect(&contextMenu, &VMContextMenu::viewDetailsRequested, this, [this]() {
+            Domain *domain = getCurrentDomain();
+            if (domain) {
+                auto *vmWindow = new VMWindow(domain, this);
+                vmWindow->show();
+            }
+        });
+
+        vmMenu->exec(m_treeView->viewport()->mapToGlobal(pos));
+        delete vmMenu;
+        return;
     }
 
-    menu.addSeparator();
-
-    QAction *editAction = menu.addAction(tr("Edit..."));
-    connect(editAction, &QAction::triggered, this, &ManagerWindow::onEditConnection);
-
-    QAction *deleteAction = menu.addAction(tr("Delete"));
-    deleteAction->setEnabled(true);
-    connect(deleteAction, &QAction::triggered, this, &ManagerWindow::onDeleteConnection);
-
-    menu.exec(m_connectionList->viewport()->mapToGlobal(pos));
+    menu.exec(m_treeView->viewport()->mapToGlobal(pos));
 }
 
 void ManagerWindow::onConnectToConnection()
 {
-    QModelIndex index = m_connectionList->currentIndex();
+    QModelIndex index = m_treeView->currentIndex();
     if (!index.isValid()) {
         return;
     }
 
-    int row = index.row();
-    Connection *conn = m_connectionModel->connectionAt(row);
-    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item || item->type() != TreeItem::ConnectionItem) {
+        return;
+    }
 
-    QString uri;
-    if (conn) {
-        uri = conn->uri();
-    } else if (info) {
-        uri = info->uri;
-    } else {
+    QString uri = item->uri();
+    if (uri.isEmpty()) {
         return;
     }
 
@@ -890,11 +817,6 @@ void ManagerWindow::onConnectToConnection()
     auto *newConn = Connection::create(uri);
     connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
     
-    // Show loading status
-    m_vmListStatusLabel->setText(tr("Connecting to %1...").arg(uri));
-    m_vmListStatusLabel->show();
-    m_vmList->setEnabled(false);
-    
     // Start async connection
     newConn->openAsync(sshKeyPath, QString());
     
@@ -904,12 +826,17 @@ void ManagerWindow::onConnectToConnection()
 
 void ManagerWindow::onDisconnectFromConnection()
 {
-    QModelIndex index = m_connectionList->currentIndex();
+    QModelIndex index = m_treeView->currentIndex();
     if (!index.isValid()) {
         return;
     }
 
-    Connection *conn = m_connectionModel->connectionAt(index.row());
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item || item->type() != TreeItem::ConnectionItem) {
+        return;
+    }
+
+    Connection *conn = item->connection();
     if (!conn) {
         return;
     }
@@ -921,21 +848,18 @@ void ManagerWindow::onDisconnectFromConnection()
 
 void ManagerWindow::onEditConnection()
 {
-    QModelIndex index = m_connectionList->currentIndex();
+    QModelIndex index = m_treeView->currentIndex();
     if (!index.isValid()) {
         return;
     }
 
-    int row = index.row();
-    Connection *conn = m_connectionModel->connectionAt(row);
-    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item || item->type() != TreeItem::ConnectionItem) {
+        return;
+    }
 
-    QString uri;
-    if (conn) {
-        uri = conn->uri();
-    } else if (info) {
-        uri = info->uri;
-    } else {
+    QString uri = item->uri();
+    if (uri.isEmpty()) {
         return;
     }
 
@@ -967,6 +891,8 @@ void ManagerWindow::onEditConnection()
         config->setConnSSHKeyPath(uri, sshKeyPath);
         config->setConnSSHUsername(uri, sshUsername);
 
+        Connection *conn = item->connection();
+        
         // If connection is active, reconnect to apply new settings
         if (conn) {
             // IMPORTANT: Don't use removeConnection() here as it will add back as disconnected
@@ -976,8 +902,7 @@ void ManagerWindow::onEditConnection()
             Engine::instance()->unregisterConnection(conn);
 
             // Remove from models
-            m_connectionModel->removeConnection(conn);
-            m_vmModel->removeConnection(conn);
+            m_treeModel->removeConnection(conn);
 
             // Open new connection with updated credentials
             Connection *newConn = Connection::open(uri, sshKeyPath, QString());
@@ -986,35 +911,32 @@ void ManagerWindow::onEditConnection()
                 m_statusLabel->setText(tr("Connection '%1' updated and reconnected").arg(uri));
             } else {
                 // If connection failed, add back as disconnected
-                m_connectionModel->addDisconnectedConnection(uri, config->connAutoconnect(uri));
+                m_treeModel->addDisconnectedConnection(uri, config->connAutoconnect(uri));
                 m_statusLabel->setText(tr("Connection '%1' updated but failed to reconnect").arg(uri));
             }
         } else {
             m_statusLabel->setText(tr("Connection '%1' updated").arg(uri));
         }
 
-        // Refresh the connection list
-        m_connectionModel->refresh();
+        // Refresh the connection tree
+        m_treeModel->refresh();
     }
 }
 
 void ManagerWindow::onDeleteConnection()
 {
-    QModelIndex index = m_connectionList->currentIndex();
+    QModelIndex index = m_treeView->currentIndex();
     if (!index.isValid()) {
         return;
     }
 
-    int row = index.row();
-    Connection *conn = m_connectionModel->connectionAt(row);
-    ConnectionInfo *info = m_connectionModel->connectionInfoAt(row);
+    TreeItem *item = m_treeModel->itemAt(index);
+    if (!item || item->type() != TreeItem::ConnectionItem) {
+        return;
+    }
 
-    QString uri;
-    if (conn) {
-        uri = conn->uri();
-    } else if (info) {
-        uri = info->uri;
-    } else {
+    QString uri = item->uri();
+    if (uri.isEmpty()) {
         return;
     }
 
@@ -1030,12 +952,13 @@ void ManagerWindow::onDeleteConnection()
         config->removeConnectionURI(uri);
 
         // Remove from model
+        Connection *conn = item->connection();
         if (conn) {
             removeConnection(conn);
             // Also remove the disconnected entry that was added back
-            m_connectionModel->removeDisconnectedConnection(uri);
-        } else if (info) {
-            m_connectionModel->removeDisconnectedConnection(uri);
+            m_treeModel->removeDisconnectedConnection(uri);
+        } else {
+            m_treeModel->removeDisconnectedConnection(uri);
         }
 
         m_statusLabel->setText(tr("Connection deleted: %1").arg(uri));
@@ -1044,7 +967,7 @@ void ManagerWindow::onDeleteConnection()
 
 void ManagerWindow::openConsole()
 {
-    Domain *domain = m_vmModel->domainAt(m_vmList->currentIndex().row());
+    Domain *domain = getCurrentDomain();
     if (!domain) {
         return;
     }
@@ -1063,18 +986,12 @@ void ManagerWindow::onConnectionStateChanged(Connection::State state)
 
     if (state == Connection::Active) {
         // Connection succeeded
-        m_vmListStatusLabel->hide();
-        m_vmList->setEnabled(true);
-        
         addConnection(conn);
         m_connectingConnections.remove(uri);
         
         m_statusLabel->setText(tr("Connected to: %1").arg(uri));
     } else if (state == Connection::ConnectionFailed) {
         // Connection failed
-        m_vmListStatusLabel->setText(tr("Failed to connect to %1: %2").arg(uri, conn->connectionError()));
-        m_vmList->setEnabled(true);
-        
         // Remove the failed connection
         conn->deleteLater();
         m_connectingConnections.remove(uri);
@@ -1083,7 +1000,7 @@ void ManagerWindow::onConnectionStateChanged(Connection::State state)
             tr("Failed to connect to: %1\n\n%2").arg(uri, conn->connectionError()));
     } else if (state == Connection::Connecting) {
         // Still connecting - update status
-        m_vmListStatusLabel->setText(tr("Connecting to %1...").arg(uri));
+        m_statusLabel->setText(tr("Connecting to %1...").arg(uri));
     }
 }
 

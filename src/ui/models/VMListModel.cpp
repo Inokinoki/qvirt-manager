@@ -41,7 +41,26 @@ QVariant VMListModel::data(const QModelIndex &index, int role) const
         return QVariant();
     }
 
-    // Safety check - verify domain has valid data
+    // Safety check - verify domain pointer is still valid by checking if it has a valid connection
+    // This catches cases where the domain was deleted but we still have a stale pointer
+    Connection *conn = domain->connection();
+    if (!conn) {
+        return QVariant();
+    }
+
+    // Additional safety check - verify the domain is still in the connection's list
+    bool domainStillExists = false;
+    for (Domain *d : conn->domains()) {
+        if (d == domain) {
+            domainStillExists = true;
+            break;
+        }
+    }
+    if (!domainStillExists) {
+        return QVariant();
+    }
+
+    // Now safely access domain data
     QString domainName = domain->name();
     if (domainName.isEmpty()) {
         return QVariant();

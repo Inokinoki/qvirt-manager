@@ -103,6 +103,9 @@ public:
     Domain *getDomain(const QString &name);
     Domain *getDomainByUUID(const QString &uuid);
 
+    // Domain creation
+    Domain *defineDomain(const QString &xml, QString *errorOutput = nullptr);
+
     QList<Network *> networks() const;
     Network *getNetwork(const QString &name);
 

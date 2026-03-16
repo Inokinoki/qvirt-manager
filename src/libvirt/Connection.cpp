@@ -362,6 +362,67 @@ Domain *Connection::getDomainByUUID(const QString &uuid)
     return nullptr;
 }
 
+Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_conn) {
+        if (errorOutput) {
+            *errorOutput = tr("Connection is not open");
+        }
+        return nullptr;
+    }
+
+    // Define the domain from XML
+    virDomainPtr domainPtr = virDomainDefineXML(m_conn, xml.toUtf8().constData());
+    if (!domainPtr) {
+        virErrorPtr err = virGetLastError();
+        if (errorOutput && err) {
+            *errorOutput = QString::fromUtf8(err->message);
+        } else if (errorOutput) {
+            *errorOutput = tr("Failed to define domain");
+        }
+        qWarning() << "Failed to define domain:" << (err ? QString::fromUtf8(err->message) : "unknown error");
+        return nullptr;
+    }
+
+    // Get the domain name from the pointer
+    const char *name = virDomainGetName(domainPtr);
+    if (!name || QString::fromUtf8(name).isEmpty()) {
+        if (errorOutput) {
+            *errorOutput = tr("Defined domain has no name");
+        }
+        qWarning() << "Defined domain has no name, freeing";
+        virDomainFree(domainPtr);
+        return nullptr;
+    }
+
+    // Check if domain already exists in cache
+    if (m_domains.contains(QString::fromUtf8(name))) {
+        if (errorOutput) {
+            *errorOutput = tr("Domain '%1' already exists").arg(QString::fromUtf8(name));
+        }
+        qWarning() << "Domain" << name << "already exists in cache";
+        virDomainFree(domainPtr);
+        return nullptr;
+    }
+
+    // Create Domain object and add to cache
+    auto *domain = new Domain(this, domainPtr);
+    m_domains[domain->name()] = domain;
+
+    qDebug() << "Defined new domain:" << domain->name();
+    emit domainAdded(domain);
+
+    return domain;
+#else
+    Q_UNUSED(xml);
+    if (errorOutput) {
+        *errorOutput = tr("libvirt not available");
+    }
+    return nullptr;
+#endif
+}
+
 QList<Network *> Connection::networks() const
 {
     return m_networks.values();

@@ -220,6 +220,7 @@ add_library(qvirt-ui
     ui/models/VMProxyModel.cpp
     ui/dialogs/ConnectionDialog.cpp
     ui/dialogs/AddHardwareDialog.cpp
+    ui/dialogs/CustomizeGuestDialog.cpp
     ui/dialogs/HostDialog.cpp
     ui/dialogs/DeleteDialog.cpp
     ui/dialogs/StoragePoolDialog.cpp

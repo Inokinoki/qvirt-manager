@@ -83,6 +83,7 @@ Connection::Connection(const QString &uri)
     , m_conn(nullptr)
     , m_tickCounter(0)
     , m_initialPoll(true)
+    , m_pollingEnabled(true)
 {
     // Attempt to open the connection (no auth)
     m_conn = virConnectOpen(uri.toUtf8().constData());
@@ -105,6 +106,7 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_conn(nullptr)
     , m_tickCounter(0)
     , m_initialPoll(true)
+    , m_pollingEnabled(true)
     , m_sshKeyPath(sshKeyPath)
 {
 #ifdef LIBVIRT_FOUND
@@ -439,6 +441,11 @@ void Connection::tick()
         return;
     }
 
+    // Skip polling if disabled (e.g., when modal dialog is open)
+    if (!m_pollingEnabled) {
+        return;
+    }
+
     m_tickCounter++;
 
     // Validate connection
@@ -448,12 +455,20 @@ void Connection::tick()
         return;
     }
 
-    // Initial resource loading
-    if (m_initialPoll && m_tickCounter > 2) {
+    // Initial resource loading - run only once, before any polling
+    if (m_initialPoll && m_tickCounter > 1) {
         m_initialPoll = false;
         qDebug() << "Starting initial resource loading...";
+        m_pollingEnabled = false;  // Disable polling during init
         initAllResources();
+        m_pollingEnabled = true;   // Re-enable after init
         qDebug() << "Initial resource loading completed";
+        return;  // Skip polling on this tick
+    }
+
+    // Skip polling if disabled
+    if (!m_pollingEnabled) {
+        return;
     }
 
     // Poll for changes

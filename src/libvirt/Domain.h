@@ -106,7 +106,7 @@ public:
 
     // Stats
     quint64 cpuTime() const;
-    float cpuUsage() const;  // percentage
+    float cpuUsage();  // percentage (non-const to allow caching)
     quint64 currentMemory() const;
     float diskUsage() const;  // percentage
     float networkUsage() const;  // percentage
@@ -119,6 +119,30 @@ public:
     DomainSnapshot *createSnapshot(const QString &xml, unsigned int flags = 0);
     DomainSnapshot *currentSnapshot() const;
     bool hasCurrentSnapshot() const;
+
+    // Guest Agent
+    bool guestAgentConnected() const;
+    QString guestAgentVersion() const;
+    bool guestAgentPing() const;
+    QString guestHostname() const;
+    QString guestOS() const;
+    QStringList guestIPAddresses() const;
+    QStringList guestGetUsers() const;
+    struct NetworkInterface {
+        QString macAddress;
+        QStringList ipAddresses;
+    };
+    QMap<QString, NetworkInterface> guestGetNetworkInterfaces() const;
+    struct Filesystem {
+        QString device;
+        QString mountPoint;
+        QString type;
+        quint64 totalSize;
+        quint64 usedSize;
+        quint64 freeSize;
+    };
+    QList<Filesystem> guestGetFilesystems() const;
+    bool guestAgentShutdown(int timeout = 60);
 
     // Connection
     Connection *connection() const { return m_connection; }
@@ -150,6 +174,11 @@ private:
     quint64 m_maxMemory;
     int m_vcpuCount;
     quint64 m_cpuTime;
+    
+    // CPU usage calculation
+    quint64 m_prevCpuTime;
+    qint64 m_prevCpuTimestamp;
+    float m_cachedCpuUsage;
 
     friend class Connection;
 };

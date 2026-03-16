@@ -78,7 +78,14 @@ private:
         RNG,
         Watchdog,
         Smartcard,
-        Memballoon
+        Memballoon,
+        USBRedir,
+        VSOCK,
+        Panic,
+        Serial,
+        Parallel,
+        IOMMU,
+        Channel
     };
 };
 
@@ -399,6 +406,146 @@ private:
     QCheckBox *m_autodeflateCheck;
     QCheckBox *m_deflateOnOOMCheck;
     QSpinBox *m_periodSpin;
+};
+
+/**
+ * @brief USB Redirection device configuration page
+ */
+class USBRedirDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit USBRedirDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QSpinBox *m_busSpin;
+    QSpinBox *m_deviceSpin;
+};
+
+/**
+ * @brief VSOCK device configuration page
+ */
+class VSOCKDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit VSOCKDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QCheckBox *m_autoCIDCheck;
+    QSpinBox *m_cidSpin;
+};
+
+/**
+ * @brief Panic device configuration page
+ */
+class PanicDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit PanicDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modelCombo;
+};
+
+/**
+ * @brief Serial device configuration page
+ */
+class SerialDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit SerialDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_typeCombo;
+    QLineEdit *m_pathEdit;
+    QSpinBox *m_portSpin;
+};
+
+/**
+ * @brief Parallel device configuration page
+ */
+class ParallelDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit ParallelDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_typeCombo;
+    QLineEdit *m_pathEdit;
+};
+
+/**
+ * @brief IOMMU device configuration page
+ */
+class IOMMUDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit IOMMUDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_modelCombo;
+};
+
+/**
+ * @brief Channel device configuration page
+ */
+class ChannelDevicePage : public DeviceConfigPage
+{
+    Q_OBJECT
+
+public:
+    explicit ChannelDevicePage(QWidget *parent = nullptr);
+
+    Device* createDevice() override;
+    bool validate() override;
+
+private:
+    void setupUI();
+
+    QComboBox *m_typeCombo;
+    QLineEdit *m_nameEdit;
+    QLineEdit *m_pathEdit;
 };
 
 } // namespace QVirt

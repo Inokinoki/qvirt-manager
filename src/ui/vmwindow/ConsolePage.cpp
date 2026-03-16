@@ -11,6 +11,8 @@
 
 #include "ConsolePage.h"
 #include "../../libvirt/EnumMapper.h"
+#include "../../console/VNCViewer.h"
+#include "../../console/SpiceViewer.h"
 
 #include <QMessageBox>
 #include <QInputDialog>
@@ -22,9 +24,13 @@ ConsolePage::ConsolePage(Domain *domain, QWidget *parent)
     , m_domain(domain)
     , m_connected(false)
     , m_fullscreen(false)
+    , m_vncViewer(nullptr)
+    , m_spiceViewer(nullptr)
+    , m_currentViewer(nullptr)
 {
     setupUI();
     setupToolbar();
+    setupViewerStack();
     setupInfoView();
     setupPlaceholderView();
     updateConsoleInfo();
@@ -58,61 +64,58 @@ void ConsolePage::setupUI()
     m_mainLayout->addLayout(statusLayout);
 }
 
+void ConsolePage::setupViewerStack()
+{
+    // Create viewer widgets
+    m_vncViewer = new VNCViewer(this);
+    m_spiceViewer = new SpiceViewer(this);
+    
+    // Connect viewer signals
+    connect(m_vncViewer, &VNCViewer::connectedChanged, this, [this](bool connected) {
+        if (connected) {
+            onViewerConnected();
+        } else {
+            onViewerDisconnected();
+        }
+    });
+    connect(m_vncViewer, &VNCViewer::errorOccurred, this, &ConsolePage::onViewerError);
+    
+    connect(m_spiceViewer, &SpiceViewer::connectedChanged, this, [this](bool connected) {
+        if (connected) {
+            onViewerConnected();
+        } else {
+            onViewerDisconnected();
+        }
+    });
+    connect(m_spiceViewer, &SpiceViewer::errorOccurred, this, &ConsolePage::onViewerError);
+    
+    // Add viewers to stack
+    m_viewStack->addWidget(m_vncViewer);
+    m_viewStack->addWidget(m_spiceViewer);
+}
+
 void ConsolePage::setupToolbar()
 {
-    m_toolbar = new QToolBar("Console Toolbar", this);
-    m_toolbar->setMovable(false);
+    m_toolbar = new ConsoleToolbar(this);
+    
+    // Connect toolbar signals
+    connect(m_toolbar, &ConsoleToolbar::fullscreenToggled, this, &ConsolePage::onFullscreenToggled);
+    connect(m_toolbar, &ConsoleToolbar::sendKeyRequested, this, &ConsolePage::onSendKeyRequested);
+    connect(m_toolbar, &ConsoleToolbar::screenshotRequested, this, &ConsolePage::onScreenshot);
+    connect(m_toolbar, &ConsoleToolbar::resizeGuestChanged, this, &ConsolePage::onResizeGuestChanged);
+    connect(m_toolbar, &ConsoleToolbar::disconnectRequested, this, &ConsolePage::onDisconnectClicked);
+    connect(m_toolbar, &ConsoleToolbar::usbRedirectionRequested, this, &ConsolePage::onUSBRedirectionRequested);
+    connect(m_toolbar, &ConsoleToolbar::fileTransferRequested, this, &ConsolePage::onFileTransferRequested);
+    connect(m_toolbar, &ConsoleToolbar::scaleFitRequested, this, &ConsolePage::onScaleFitRequested);
+    connect(m_toolbar, &ConsoleToolbar::scaleFillRequested, this, &ConsolePage::onScaleFillRequested);
+    connect(m_toolbar, &ConsoleToolbar::scale100Requested, this, &ConsolePage::onScale100Requested);
 
-    // Connect/Disconnect actions
+    // Connect action for toolbar
     m_actionConnect = new QAction("Connect", this);
     m_actionConnect->setIcon(QIcon::fromTheme("network-connect"));
     m_actionConnect->setToolTip("Connect to the console");
     connect(m_actionConnect, &QAction::triggered, this, &ConsolePage::onConnectClicked);
-    m_toolbar->addAction(m_actionConnect);
-
-    m_actionDisconnect = new QAction("Disconnect", this);
-    m_actionDisconnect->setIcon(QIcon::fromTheme("network-disconnect"));
-    m_actionDisconnect->setToolTip("Disconnect from the console");
-    m_actionDisconnect->setEnabled(false);
-    connect(m_actionDisconnect, &QAction::triggered, this, &ConsolePage::onDisconnectClicked);
-    m_toolbar->addAction(m_actionDisconnect);
-
-    m_toolbar->addSeparator();
-
-    // Fullscreen action
-    m_actionFullscreen = new QAction("Fullscreen", this);
-    m_actionFullscreen->setIcon(QIcon::fromTheme("view-fullscreen"));
-    m_actionFullscreen->setToolTip("Toggle fullscreen mode");
-    m_actionFullscreen->setCheckable(true);
-    m_actionFullscreen->setEnabled(false);
-    connect(m_actionFullscreen, &QAction::toggled, this, &ConsolePage::onFullscreenToggled);
-    m_toolbar->addAction(m_actionFullscreen);
-
-    // Send key combination
-    m_actionSendKey = new QAction("Send Key", this);
-    m_actionSendKey->setIcon(QIcon::fromTheme("preferences-desktop-keyboard-shortcuts"));
-    m_actionSendKey->setToolTip("Send key combination to VM");
-    m_actionSendKey->setEnabled(false);
-    connect(m_actionSendKey, &QAction::triggered, this, &ConsolePage::onSendKey);
-    m_toolbar->addAction(m_actionSendKey);
-
-    // Screenshot
-    m_actionScreenshot = new QAction("Screenshot", this);
-    m_actionScreenshot->setIcon(QIcon::fromTheme("camera-photo"));
-    m_actionScreenshot->setToolTip("Take a screenshot");
-    m_actionScreenshot->setEnabled(false);
-    connect(m_actionScreenshot, &QAction::triggered, this, &ConsolePage::onScreenshot);
-    m_toolbar->addAction(m_actionScreenshot);
-
-    m_toolbar->addSeparator();
-
-    // Resize guest
-    m_actionResizeGuest = new QAction("Resize Guest", this);
-    m_actionResizeGuest->setToolTip("Allow console to resize guest resolution");
-    m_actionResizeGuest->setCheckable(true);
-    m_actionResizeGuest->setEnabled(false);
-    connect(m_actionResizeGuest, &QAction::toggled, this, &ConsolePage::onResizeGuestChanged);
-    m_toolbar->addAction(m_actionResizeGuest);
+    m_toolbar->insertAction(m_toolbar->actions().first(), m_actionConnect);
 
     m_mainLayout->insertWidget(0, m_toolbar);
 }
@@ -263,43 +266,119 @@ void ConsolePage::refresh()
 
 void ConsolePage::connectConsole()
 {
-    // Placeholder for actual console connection
-    // In a full implementation, this would:
-    // 1. Get the graphics device configuration
-    // 2. Create appropriate viewer (VNC or SPICE)
-    // 3. Establish connection to the display
-    // 4. Embed the viewer widget
+    if (m_domain->state() != Domain::StateRunning) {
+        QMessageBox::warning(this, "Cannot Connect",
+            "The virtual machine must be running to connect to the console.");
+        return;
+    }
 
-    m_connected = true;
-    m_statusLabel->setText("Connected (placeholder)");
-    m_viewStack->setCurrentWidget(m_placeholderWidget);
+    // Get graphics type and connection info
+    QString xml = m_domain->getXMLDesc(0);
+    QString host = "127.0.0.1";
+    int port = 0;
+    int tlsPort = 0;
+    QString password;
 
-    // Update UI state
-    m_actionConnect->setEnabled(false);
-    m_actionDisconnect->setEnabled(true);
-    m_actionFullscreen->setEnabled(true);
-    m_actionSendKey->setEnabled(true);
-    m_actionScreenshot->setEnabled(true);
-    m_actionResizeGuest->setEnabled(true);
+    // Parse VNC configuration
+    if (m_graphicsType == "VNC") {
+        // Extract port
+        int portIdx = xml.indexOf("port='");
+        if (portIdx > 0) {
+            int start = portIdx + 6;
+            int end = xml.indexOf("'", start);
+            if (end > start) {
+                port = xml.mid(start, end - start).toInt();
+            }
+        }
+        // Extract listen address
+        int addrIdx = xml.indexOf("listen='");
+        if (addrIdx > 0) {
+            int start = addrIdx + 8;
+            int end = xml.indexOf("'", start);
+            if (end > start) {
+                host = xml.mid(start, end - start);
+            }
+        }
+        // Extract password
+        int passwdIdx = xml.indexOf("passwd='");
+        if (passwdIdx > 0) {
+            int start = passwdIdx + 8;
+            int end = xml.indexOf("'", start);
+            if (end > start) {
+                password = xml.mid(start, end - start);
+            }
+        }
 
-    emit consoleConnected();
+        // Connect VNC viewer
+        if (port > 0 && m_vncViewer) {
+            m_viewStack->setCurrentWidget(m_vncViewer);
+            if (!password.isEmpty()) {
+                m_vncViewer->setPassword(password);
+            }
+            m_vncViewer->connectToHost(host, port);
+            m_statusLabel->setText("Connecting to VNC...");
+        }
+    } else if (m_graphicsType == "SPICE") {
+        // Extract SPICE port
+        int portIdx = xml.indexOf("port='");
+        if (portIdx > 0) {
+            int start = portIdx + 6;
+            int end = xml.indexOf("'", start);
+            if (end > start) {
+                port = xml.mid(start, end - start).toInt();
+            }
+        }
+        // Extract TLS port
+        int tlsIdx = xml.indexOf("tlsPort='");
+        if (tlsIdx > 0) {
+            int start = tlsIdx + 9;
+            int end = xml.indexOf("'", start);
+            if (end > start) {
+                tlsPort = xml.mid(start, end - start).toInt();
+            }
+        }
+        // Extract listen address
+        int addrIdx = xml.indexOf("listen='");
+        if (addrIdx > 0) {
+            int start = addrIdx + 8;
+            int end = xml.indexOf("'", start);
+            if (end > start) {
+                host = xml.mid(start, end - start);
+            }
+        }
+
+        // Connect SPICE viewer
+        if (port > 0 && m_spiceViewer) {
+            m_viewStack->setCurrentWidget(m_spiceViewer);
+            if (!password.isEmpty()) {
+                m_spiceViewer->setPassword(password);
+            }
+            if (tlsPort > 0) {
+                m_spiceViewer->setTLSPort(tlsPort);
+            }
+            m_spiceViewer->connectToHost(host, port);
+            m_statusLabel->setText("Connecting to SPICE...");
+        }
+    } else {
+        QMessageBox::warning(this, "No Console",
+            "No VNC or SPICE graphics device configured for this VM.");
+        return;
+    }
 }
 
 void ConsolePage::disconnectConsole()
 {
-    // Placeholder for disconnection
+    if (m_vncViewer) {
+        m_vncViewer->disconnect();
+    }
+    if (m_spiceViewer) {
+        m_spiceViewer->disconnect();
+    }
+
     m_connected = false;
     m_statusLabel->setText("Disconnected");
     m_viewStack->setCurrentWidget(m_infoWidget);
-
-    // Update UI state
-    m_actionConnect->setEnabled(m_domain->state() == Domain::StateRunning);
-    m_actionDisconnect->setEnabled(false);
-    m_actionFullscreen->setEnabled(false);
-    m_actionSendKey->setEnabled(false);
-    m_actionScreenshot->setEnabled(false);
-    m_actionResizeGuest->setEnabled(false);
-    m_actionFullscreen->setChecked(false);
+    m_toolbar->setConnected(false);
 
     emit consoleDisconnected();
 }
@@ -335,27 +414,6 @@ void ConsolePage::onFullscreenToggled(bool checked)
     }
 }
 
-void ConsolePage::onSendKey()
-{
-    bool ok;
-    QString key = QInputDialog::getItem(
-        this,
-        "Send Key Combination",
-        "Select key combination to send:",
-        {"Ctrl+Alt+Delete", "Ctrl+Alt+BackSpace", "Print Screen"},
-        0,
-        false,
-        &ok
-    );
-
-    if (ok && !key.isEmpty()) {
-        // Placeholder for actual key sending
-        // In a full implementation, this would send the key combination
-        // through the viewer widget
-        m_statusLabel->setText("Sent key: " + key + " (placeholder)");
-    }
-}
-
 void ConsolePage::onScreenshot()
 {
     // Placeholder for screenshot functionality
@@ -368,10 +426,105 @@ void ConsolePage::onScreenshot()
 
 void ConsolePage::onResizeGuestChanged(bool checked)
 {
-    // Placeholder for resize guest functionality
-    // In a full implementation, this would enable/disable
-    // automatic resizing of the guest display resolution
+    // Enable/disable auto-resize on viewers
+    if (m_vncViewer) {
+        m_vncViewer->setScalingEnabled(checked);
+    }
+    if (m_spiceViewer) {
+        m_spiceViewer->setScalingEnabled(checked);
+    }
     m_statusLabel->setText(QString("Resize guest: %1").arg(checked ? "Enabled" : "Disabled"));
+}
+
+void ConsolePage::onSendKeyRequested(const QString &keyCombo)
+{
+    if (!m_connected) {
+        return;
+    }
+    
+    if (m_graphicsType == "VNC" && m_vncViewer) {
+        m_vncViewer->sendKeys(keyCombo);
+    } else if (m_graphicsType == "SPICE" && m_spiceViewer) {
+        m_spiceViewer->sendKeys(keyCombo);
+    }
+    m_statusLabel->setText("Sent key: " + keyCombo);
+}
+
+void ConsolePage::onUSBRedirectionRequested()
+{
+    if (m_spiceViewer) {
+        // Show USB redirection dialog
+        QMessageBox::information(this, "USB Redirection",
+            "USB Redirection\n\n"
+            "Select USB devices to redirect to the VM.\n\n"
+            "Note: Requires SPICE protocol and usbredir configuration.");
+    }
+}
+
+void ConsolePage::onFileTransferRequested()
+{
+    QMessageBox::information(this, "File Transfer",
+        "File Transfer\n\n"
+        "Drag and drop files to transfer them to the VM.\n\n"
+        "Note: Requires SPICE protocol and spice-webdavd in guest.");
+}
+
+void ConsolePage::onScaleFitRequested()
+{
+    if (m_vncViewer) {
+        m_vncViewer->setScalingEnabled(true);
+    }
+    if (m_spiceViewer) {
+        m_spiceViewer->setScalingEnabled(true);
+    }
+    m_toolbar->setScalingEnabled(true);
+}
+
+void ConsolePage::onScaleFillRequested()
+{
+    if (m_vncViewer) {
+        m_vncViewer->setScalingEnabled(true);
+    }
+    if (m_spiceViewer) {
+        m_spiceViewer->setScalingEnabled(true);
+    }
+    m_toolbar->setScalingEnabled(true);
+}
+
+void ConsolePage::onScale100Requested()
+{
+    if (m_vncViewer) {
+        m_vncViewer->setScalingEnabled(false);
+    }
+    if (m_spiceViewer) {
+        m_spiceViewer->setScalingEnabled(false);
+    }
+    m_toolbar->setScalingEnabled(false);
+}
+
+void ConsolePage::onViewerError(const QString &message)
+{
+    m_statusLabel->setText("Error: " + message);
+    QMessageBox::warning(this, "Console Error", message);
+    disconnectConsole();
+}
+
+void ConsolePage::onViewerConnected()
+{
+    m_connected = true;
+    m_statusLabel->setText("Connected to " + m_graphicsType + " console");
+    m_toolbar->setConnected(true);
+    m_toolbar->setViewerType(m_graphicsType);
+    emit consoleConnected();
+}
+
+void ConsolePage::onViewerDisconnected()
+{
+    m_connected = false;
+    m_statusLabel->setText("Disconnected");
+    m_toolbar->setConnected(false);
+    m_viewStack->setCurrentWidget(m_infoWidget);
+    emit consoleDisconnected();
 }
 
 } // namespace QVirt

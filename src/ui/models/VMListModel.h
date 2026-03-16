@@ -41,13 +41,16 @@ public:
         CPURole,
         MemoryRole,
         MaxMemoryRole,
-        VCPUCountRole
+        VCPUCountRole,
+        DescriptionRole,
+        MemoryFormattedRole
     };
 
     explicit VMListModel(QObject *parent = nullptr);
 
-    // QAbstractListModel interface
+    // QAbstractItemModel interface (for QTableView)
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override { Q_UNUSED(parent); return 3; }
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role = Qt::DisplayRole) const override;
@@ -74,12 +77,14 @@ public slots:
 
 private:
     void rebuildDomainList();
+    void rebuildDomainListInternal();
 
     QList<Connection*> m_connections;
     QList<Domain*> m_domains;
 
     bool m_showActive;
     bool m_showInactive;
+    bool m_resetting;
 };
 
 } // namespace QVirt

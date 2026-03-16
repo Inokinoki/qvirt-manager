@@ -8,7 +8,6 @@ add_library(qvirt-core
     core/SystemTray.cpp
     core/ProgressDialog.cpp
     core/GuestAgent.cpp
-    core/OSDatabase.cpp
 )
 
 target_include_directories(qvirt-core
@@ -41,20 +40,7 @@ if(LIBVIRT_FOUND)
     )
 endif()
 
-# Link libosinfo if available
-if(LIBOSINFO_FOUND)
-    target_include_directories(qvirt-core
-        PRIVATE
-            ${LIBOSINFO_INCLUDE_DIRS}
-    )
-    target_link_libraries(qvirt-core
-        PRIVATE
-            ${LIBOSINFO_LIBRARIES}
-    )
-endif()
-
 # Libvirt wrappers
-# Only add libvirt sources when libvirt is found
 if(LIBVIRT_FOUND)
     add_library(qvirt-libvirt
         libvirt/Connection.cpp
@@ -69,7 +55,6 @@ if(LIBVIRT_FOUND)
         libvirt/Guest.cpp
     )
 else()
-    # Create empty library when libvirt is not found
     add_library(qvirt-libvirt STATIC
         libvirt/DomainCheckpoint.cpp
     )
@@ -90,27 +75,14 @@ target_link_libraries(qvirt-libvirt
         Qt${QT_VERSION_MAJOR}::Xml
 )
 
-if(LIBVIRT_FOUND)
-    target_include_directories(qvirt-libvirt
-        PUBLIC
-            ${LIBVIRT_INCLUDE_DIRS}
-    )
-endif()
-
-target_link_libraries(qvirt-libvirt
-    PUBLIC
-        qvirt-core
-        qvirt-devices
-        Qt${QT_VERSION_MAJOR}::Core
-        Qt${QT_VERSION_MAJOR}::Widgets
-        Qt${QT_VERSION_MAJOR}::Xml
-)
-
 # Console library
 add_library(qvirt-console
     console/Viewer.cpp
     console/VNCViewer.cpp
     console/SpiceViewer.cpp
+    console/VNCWidget.cpp
+    console/SpiceWidget.cpp
+    console/SerialConsole.cpp
 )
 
 target_include_directories(qvirt-console
@@ -126,7 +98,6 @@ target_link_libraries(qvirt-console
         Qt${QT_VERSION_MAJOR}::Gui
 )
 
-# Link VNC library if available
 if(GTKVNC_FOUND)
     target_include_directories(qvirt-console
         PRIVATE
@@ -136,9 +107,12 @@ if(GTKVNC_FOUND)
         PRIVATE
             ${GTKVNC_LIBRARIES}
     )
+    target_compile_definitions(qvirt-console
+        PUBLIC
+            GTKVNC_FOUND
+    )
 endif()
 
-# Link SPICE library if available
 if(SPICEGTK_FOUND)
     target_include_directories(qvirt-console
         PRIVATE
@@ -148,16 +122,24 @@ if(SPICEGTK_FOUND)
         PRIVATE
             ${SPICEGTK_LIBRARIES}
     )
+    target_compile_definitions(qvirt-console
+        PUBLIC
+            SPICEGTK_FOUND
+    )
 endif()
 
-if(LIBVIRT_FOUND)
-    target_link_libraries(qvirt-libvirt
+if(QTERMWIDGET_FOUND)
+    target_include_directories(qvirt-console
         PRIVATE
-            ${LIBVIRT_LIBRARIES}
+            ${QTERMWIDGET_INCLUDE_DIRS}
     )
-    target_compile_definitions(qvirt-libvirt
+    target_link_libraries(qvirt-console
+        PRIVATE
+            ${QTERMWIDGET_LIBRARIES}
+    )
+    target_compile_definitions(qvirt-console
         PUBLIC
-            LIBVIRT_FOUND
+            QTERMWIDGET_FOUND
     )
 endif()
 
@@ -178,13 +160,13 @@ add_library(qvirt-devices
     devices/RNGDevice.cpp
     devices/SmartcardDevice.cpp
     devices/MemballoonDevice.cpp
-<<<<<<< HEAD
     devices/PanicDevice.cpp
     devices/VSockDevice.cpp
     devices/USBRedirDevice.cpp
     devices/SerialDevice.cpp
     devices/ParallelDevice.cpp
     devices/IOMMUDevice.cpp
+    devices/ChannelDevice.cpp
 )
 
 target_include_directories(qvirt-devices
@@ -200,7 +182,7 @@ target_link_libraries(qvirt-devices
         Qt${QT_VERSION_MAJOR}::Xml
 )
 
-# Domain library (CPU/Memory tuning, firmware, security, etc.)
+# Domain library
 add_library(qvirt-domain
     domain/CPUTune.cpp
     domain/MemTune.cpp
@@ -227,22 +209,6 @@ target_link_libraries(qvirt-domain
         qvirt-core
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Xml
-=======
-    devices/ChannelDevice.cpp
->>>>>>> c8122acfe84a3c144ce74007374f7f3ace85c6b2
-)
-
-target_include_directories(qvirt-devices
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(qvirt-devices
-    PUBLIC
-        qvirt-core
-        Qt${QT_VERSION_MAJOR}::Core
-        Qt${QT_VERSION_MAJOR}::Widgets
-        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 # UI components
@@ -250,6 +216,7 @@ add_library(qvirt-ui
     ui/manager/ManagerWindow.cpp
     ui/models/ConnectionListModel.cpp
     ui/models/VMListModel.cpp
+    ui/models/VMProxyModel.cpp
     ui/dialogs/ConnectionDialog.cpp
     ui/dialogs/AddHardwareDialog.cpp
     ui/dialogs/HostDialog.cpp
@@ -261,9 +228,18 @@ add_library(qvirt-ui
     ui/dialogs/MigrateDialog.cpp
     ui/dialogs/PreferencesDialog.cpp
     ui/dialogs/XMLEditor.cpp
-    ui/dialogs/OSListDialog.cpp
+    ui/dialogs/ErrorDialog.cpp
+    ui/dialogs/FirmwareDialog.cpp
+    ui/dialogs/BootOrderDialog.cpp
+    ui/dialogs/CPUTuneDialog.cpp
+    ui/dialogs/MemTuneDialog.cpp
+    ui/dialogs/BlkIOTuneDialog.cpp
     ui/widgets/GraphWidget.cpp
     ui/widgets/ContextMenu.cpp
+    ui/widgets/VMFilterBar.cpp
+    ui/widgets/ExportStatsDialog.cpp
+    ui/widgets/ConsoleToolbar.cpp
+    ui/device/GuestAgentDetails.cpp
     ui/vmwindow/VMWindow.cpp
     ui/vmwindow/OverviewPage.cpp
     ui/vmwindow/DetailsPage.cpp
@@ -297,6 +273,7 @@ target_link_libraries(qvirt-ui
         qvirt-libvirt
         qvirt-console
         qvirt-devices
+        qvirt-domain
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::UiTools
@@ -319,20 +296,15 @@ if(LIBVIRT_FOUND)
         PRIVATE
             ${LIBVIRT_INCLUDE_DIRS}
     )
-endif()
-
-if(LIBVIRT_FOUND)
     target_link_directories(qvirt-manager
         PRIVATE
             ${LIBVIRT_LIBRARY_DIRS}
     )
 endif()
 
-# Note: qvirt-ui transitively links qvirt-libvirt and qvirt-core, which bring in qvirt-devices
 target_link_libraries(qvirt-manager
     PRIVATE
         qvirt-ui
-        # Explicitly link Qt libraries to ensure proper symbol resolution on all platforms
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::UiTools
@@ -340,7 +312,12 @@ target_link_libraries(qvirt-manager
         Qt${QT_VERSION_MAJOR}::Network
 )
 
-# Note: libvirt is already linked via qvirt-core and qvirt-libvirt static libraries
+if(LIBVIRT_FOUND)
+    target_link_libraries(qvirt-manager
+        PRIVATE
+            ${LIBVIRT_LIBRARIES}
+    )
+endif()
 
 # Install
 install(TARGETS qvirt-manager DESTINATION ${CMAKE_INSTALL_BINDIR})

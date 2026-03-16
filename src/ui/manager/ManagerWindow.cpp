@@ -123,6 +123,17 @@ void ManagerWindow::setupUI()
     m_vmList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_vmList->setAlternatingRowColors(true);
     m_vmList->setContextMenuPolicy(Qt::CustomContextMenu);
+    
+    // Configure table view for better display
+    m_vmList->setShowGrid(false);
+    m_vmList->setCornerButtonEnabled(false);
+    m_vmList->horizontalHeader()->setStretchLastSection(true);
+    m_vmList->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_vmList->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    m_vmList->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
+    m_vmList->verticalHeader()->setVisible(false);
+    m_vmList->setColumnWidth(1, 100);  // State
+    m_vmList->setColumnWidth(2, 120);  // Memory
     connect(m_vmList, &QTableView::customContextMenuRequested,
             this, [this](const QPoint &pos) {
                 Domain *domain = m_vmModel->domainAt(m_vmList->indexAt(pos).row());
@@ -154,12 +165,6 @@ void ManagerWindow::setupUI()
                     delete menu;
                 }
             });
-
-    // Set column widths
-    m_vmList->setColumnWidth(0, 250);  // Name
-    m_vmList->setColumnWidth(1, 100);  // State
-    m_vmList->setColumnWidth(2, 80);   // CPU
-    m_vmList->setColumnWidth(3, 100);  // Memory
 
     rightLayout->addWidget(m_vmList);
 
@@ -524,13 +529,28 @@ void ManagerWindow::onNewVM()
     // Get the selected connection
     QModelIndex connIndex = m_connectionList->currentIndex();
     if (!connIndex.isValid()) {
-        QMessageBox::warning(this, tr("No Connection Selected"),
-            tr("Please select a connection first."));
-        return;
+        // Try to get the first available connection
+        if (m_connectionModel->rowCount() > 0) {
+            connIndex = m_connectionModel->index(0, 0);
+            m_connectionList->setCurrentIndex(connIndex);
+        } else {
+            QMessageBox::warning(this, tr("No Connection Available"),
+                tr("Please add a connection first."));
+            return;
+        }
     }
 
     Connection *conn = m_connectionModel->connectionAt(connIndex.row());
     if (!conn) {
+        QMessageBox::warning(this, tr("Connection Error"),
+            tr("Failed to get connection."));
+        return;
+    }
+
+    // Check if connection is active
+    if (conn->state() != Connection::Active) {
+        QMessageBox::warning(this, tr("Connection Not Active"),
+            tr("The selected connection is not active. Please connect first."));
         return;
     }
 
@@ -538,12 +558,19 @@ void ManagerWindow::onNewVM()
     auto *wizard = new CreateVMWizard(conn, this);
     wizard->setAttribute(Qt::WA_DeleteOnClose);
 
-    connect(wizard, &QWizard::accepted, this, [this, conn]() {
+    connect(wizard, &QWizard::accepted, this, [this]() {
         m_statusLabel->setText(tr("VM created successfully"));
-        // VM list will be updated by Connection polling
+        m_vmModel->refresh();
     });
 
-    wizard->show();
+    int result = wizard->exec();  // Use exec() for modal dialog
+    
+    // Re-enable polling after dialog closes (if it was disabled)
+    conn->setPollingEnabled(true);
+    
+    if (result == QDialog::Accepted) {
+        m_vmModel->refresh();
+    }
 }
 
 void ManagerWindow::onDeleteVM()
@@ -687,16 +714,41 @@ void ManagerWindow::updateVMControls()
     Domain *domain = m_vmModel->domainAt(current.row());
 
     bool hasSelection = (domain != nullptr);
+    Domain::State state = domain ? domain->state() : Domain::StateNoState;
 
+    // Enable buttons only when a VM is selected
     m_btnStart->setEnabled(hasSelection);
     m_btnStop->setEnabled(hasSelection);
     m_btnReboot->setEnabled(hasSelection);
-    m_btnPause->setEnabled(hasSelection && domain && domain->state() == Domain::StateRunning);
-    m_btnResume->setEnabled(false);  // Will be enabled when paused
+    m_btnPause->setEnabled(hasSelection);
+    m_btnResume->setEnabled(hasSelection);
     m_btnDeleteVM->setEnabled(hasSelection);
-    m_btnOpenConsole->setEnabled(hasSelection && domain && domain->state() == Domain::StateRunning);
+    
+    // Console should be enabled for all VM states (user can at least view info)
+    m_btnOpenConsole->setEnabled(hasSelection);
 
-    // Update actions
+    // Fine-tune button states based on VM state
+    if (hasSelection && domain) {
+        // Start - only when stopped/shutoff
+        m_btnStart->setEnabled(state == Domain::StateShutOff || state == Domain::StateNoState);
+        
+        // Stop - only when running/blocked
+        m_btnStop->setEnabled(state == Domain::StateRunning || state == Domain::StateBlocked);
+        
+        // Reboot - only when running
+        m_btnReboot->setEnabled(state == Domain::StateRunning);
+        
+        // Pause - only when running
+        m_btnPause->setEnabled(state == Domain::StateRunning);
+        
+        // Resume - only when paused
+        m_btnResume->setEnabled(state == Domain::StatePaused);
+        
+        // Delete - when stopped/shutoff or running (with confirmation)
+        m_btnDeleteVM->setEnabled(state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
+    }
+
+    // Update actions to match buttons
     m_actionStart->setEnabled(m_btnStart->isEnabled());
     m_actionStop->setEnabled(m_btnStop->isEnabled());
     m_actionReboot->setEnabled(m_btnReboot->isEnabled());

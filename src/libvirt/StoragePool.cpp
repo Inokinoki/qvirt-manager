@@ -28,14 +28,25 @@ StoragePool::StoragePool(Connection *conn, virStoragePoolPtr pool)
     , m_allocation(0)
     , m_available(0)
 {
+    if (!m_pool) {
+        qWarning() << "StoragePool created with null virStoragePoolPtr";
+        return;
+    }
+
     const char *name = virStoragePoolGetName(m_pool);
-    if (name) {
+    if (!name || QString::fromUtf8(name).isEmpty()) {
+        qWarning() << "StoragePool has no name, using placeholder";
+        m_name = "unknown-pool";
+    } else {
         m_name = QString::fromUtf8(name);
     }
 
     char uuid[VIR_UUID_STRING_BUFLEN];
-    if (virStoragePoolGetUUIDString(m_pool, uuid) == 0) {
+    int uuidRet = virStoragePoolGetUUIDString(m_pool, uuid);
+    if (uuidRet == 0) {
         m_uuid = QString::fromUtf8(uuid);
+    } else {
+        m_uuid = QString();
     }
 
     // Check if pool is active - handle potential remote access errors
@@ -53,13 +64,14 @@ StoragePool::StoragePool(Connection *conn, virStoragePoolPtr pool)
 
     // Get capacity/allocation info - handle potential remote access errors
     virStoragePoolInfo poolInfo;
-    if (virStoragePoolGetInfo(m_pool, &poolInfo) == 0) {
+    int infoRet = virStoragePoolGetInfo(m_pool, &poolInfo);
+    if (infoRet == 0) {
         m_capacity = poolInfo.capacity;
         m_allocation = poolInfo.allocation;
         m_available = poolInfo.available;
         m_state = static_cast<PoolState>(poolInfo.state);
     } else {
-        qWarning() << "Failed to get storage pool info for" << m_name;
+        qWarning() << "Failed to get storage pool info for" << m_name << ", using defaults";
     }
 
     // Get and parse XML to determine pool type

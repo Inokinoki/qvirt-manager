@@ -63,12 +63,26 @@ void CreateVMWizard::setupPages()
 void CreateVMWizard::setupConnections()
 {
     connect(this, &QWizard::currentIdChanged, this, &CreateVMWizard::onCurrentIdChanged);
+    connect(this, &QWizard::customButtonClicked, this, &CreateVMWizard::onCustomizeClicked);
+}
+
+void CreateVMWizard::onCustomizeClicked()
+{
+    // Jump to the summary page to review all settings
+    setCurrentId(Page_Summary);
 }
 
 void CreateVMWizard::onCurrentIdChanged(int id)
 {
     Q_UNUSED(id);
-    // Can perform page-specific actions here
+    // Enable/disable Customize button based on current page
+    // Only show Customize on first page
+    bool showCustomize = (currentId() == Page_NameAndOS);
+    if (showCustomize) {
+        setButtonLayout({BackButton, Stretch, CustomButton1, NextButton, FinishButton, CancelButton});
+    } else {
+        setButtonLayout({BackButton, Stretch, NextButton, FinishButton, CancelButton});
+    }
 }
 
 bool CreateVMWizard::validateCurrentPage()

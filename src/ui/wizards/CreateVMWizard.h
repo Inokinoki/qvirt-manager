@@ -65,8 +65,9 @@ public:
     QString networkSource() const;
     bool startAfterInstall() const;
 
-private slots:
+ private slots:
     void onCurrentIdChanged(int id);
+    void onCustomizeClicked();
     bool validateCurrentPage();
 
 private:

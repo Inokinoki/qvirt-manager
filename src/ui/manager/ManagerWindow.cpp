@@ -14,6 +14,7 @@
 #include "../dialogs/StoragePoolDialog.h"
 #include "../dialogs/NetworkDialog.h"
 #include "../dialogs/PreferencesDialog.h"
+#include "../dialogs/ConnectionProgressDialog.h"
 #include "../widgets/ContextMenu.h"
 #include "../widgets/GraphWidget.h"
 #include "../vmwindow/VMWindow.h"
@@ -444,6 +445,8 @@ void ManagerWindow::onVMResume()
 
 void ManagerWindow::onNewVM()
 {
+    qDebug() << "onNewVM: Starting VM creation wizard";
+
     // Get the selected connection
     Connection *conn = getCurrentConnection();
     if (!conn) {
@@ -453,7 +456,7 @@ void ManagerWindow::onNewVM()
             m_treeView->setCurrentIndex(firstIndex);
             conn = getCurrentConnection();
         }
-        
+
         if (!conn) {
             QMessageBox::warning(this, tr("No Connection Available"),
                 tr("Please add a connection first."));
@@ -464,7 +467,7 @@ void ManagerWindow::onNewVM()
     if (!conn) {
         QMessageBox::warning(this, tr("Connection Error"),
             tr("Failed to get connection."));
-        return;
+            return;
     }
 
     // Check if connection is active
@@ -474,21 +477,28 @@ void ManagerWindow::onNewVM()
         return;
     }
 
+    qDebug() << "onNewVM: Opening wizard for connection:" << conn->uri();
+
     // Open the create VM wizard
     auto *wizard = new CreateVMWizard(conn, this);
     wizard->setAttribute(Qt::WA_DeleteOnClose);
 
-    connect(wizard, &QWizard::accepted, this, [this]() {
+    connect(wizard, &QWizard::accepted, this, [this, conn]() {
+        qDebug() << "onNewVM: Wizard accepted, refreshing tree model";
         m_statusLabel->setText(tr("VM created successfully"));
         m_treeModel->refresh();
+        qDebug() << "onNewVM: Tree model refreshed, domain count:" << conn->domains().count();
     });
 
     int result = wizard->exec();  // Use exec() for modal dialog
-    
+
+    qDebug() << "onNewVM: Wizard exec() returned:" << result;
+
     // Re-enable polling after dialog closes (if it was disabled)
     conn->setPollingEnabled(true);
-    
+
     if (result == QDialog::Accepted) {
+        qDebug() << "onNewVM: Result was Accepted, calling refresh again";
         m_treeModel->refresh();
     }
 }
@@ -813,13 +823,18 @@ void ManagerWindow::onConnectToConnection()
     QString sshKeyPath = config->connSSHKeyPath(uri);
     QString sshUsername = config->connSSHUsername(uri);
 
+    // Create and show progress dialog
+    m_progressDialog = new ConnectionProgressDialog(this);
+    m_progressDialog->show();
+
     // Create connection and connect asynchronously
     auto *newConn = Connection::create(uri);
     connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
-    
+    connect(newConn, &Connection::connectionProgress, m_progressDialog, &ConnectionProgressDialog::updateStatus);
+
     // Start async connection
     newConn->openAsync(sshKeyPath, QString());
-    
+
     // Temporarily store the connection until connection completes
     m_connectingConnections[uri] = newConn;
 }
@@ -988,14 +1003,28 @@ void ManagerWindow::onConnectionStateChanged(Connection::State state)
         // Connection succeeded
         addConnection(conn);
         m_connectingConnections.remove(uri);
-        
+
+        // Close progress dialog
+        if (m_progressDialog) {
+            m_progressDialog->close();
+            m_progressDialog->deleteLater();
+            m_progressDialog = nullptr;
+        }
+
         m_statusLabel->setText(tr("Connected to: %1").arg(uri));
     } else if (state == Connection::ConnectionFailed) {
         // Connection failed
         // Remove the failed connection
         conn->deleteLater();
         m_connectingConnections.remove(uri);
-        
+
+        // Close progress dialog
+        if (m_progressDialog) {
+            m_progressDialog->close();
+            m_progressDialog->deleteLater();
+            m_progressDialog = nullptr;
+        }
+
         QMessageBox::warning(this, tr("Connection Failed"),
             tr("Failed to connect to: %1\n\n%2").arg(uri, conn->connectionError()));
     } else if (state == Connection::Connecting) {

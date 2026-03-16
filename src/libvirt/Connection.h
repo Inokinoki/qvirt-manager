@@ -135,6 +135,7 @@ public:
 
 signals:
     void stateChanged(State newState);
+    void connectionProgress(const QString &status);
     void domainAdded(Domain *domain);
     void domainRemoved(Domain *domain);
     void networkAdded(Network *network);

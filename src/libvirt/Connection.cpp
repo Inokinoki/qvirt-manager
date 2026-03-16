@@ -222,13 +222,14 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
     emit stateChanged(m_state);
 
     auto *watcher = new QFutureWatcher<bool>(this);
-    
+
     connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
         bool success = watcher->result();
-        
+
         if (success) {
             m_state = Active;
             m_connectionError.clear();
+            emit connectionProgress(tr("Connection established"));
             qDebug() << "Async connection to" << m_uri << "succeeded";
         } else {
             m_state = ConnectionFailed;
@@ -237,7 +238,7 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
             }
             qWarning() << "Async connection to" << m_uri << "failed:" << m_connectionError;
         }
-        
+
         emit stateChanged(m_state);
         watcher->deleteLater();
     });
@@ -245,25 +246,46 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
     QFuture<bool> future = QtConcurrent::run([this, sshKeyPath, password]() -> bool {
 #ifdef LIBVIRT_FOUND
         virConnectPtr conn = nullptr;
-        
+
+        // Extract hostname for status messages
+        QString hostname = m_uri;
+        if (hostname.contains("://")) {
+            hostname = hostname.split("://")[1];
+            if (hostname.contains("/")) {
+                hostname = hostname.split("/")[0];
+            }
+            if (hostname.contains("@")) {
+                hostname = hostname.split("@")[1];
+            }
+            if (hostname.contains(":")) {
+                hostname = hostname.split(":")[0];
+            }
+        }
+
         if (sshKeyPath.isEmpty() && password.isEmpty()) {
+            emit connectionProgress(tr("Connecting to %1...").arg(m_uri));
             conn = virConnectOpen(m_uri.toUtf8().constData());
         } else {
             ConnectionAuthData authData;
             authData.password = password;
             authData.sshKeyPath = sshKeyPath;
-            
+
+            // Show SSH connection status
+            emit connectionProgress(tr("Connecting via SSH to %1...").arg(hostname));
+
             QByteArray originalLibvirtSsh;
             if (!sshKeyPath.isEmpty()) {
                 originalLibvirtSsh = qgetenv("LIBVIRT_SSH");
                 QString sshCmd = QString("ssh -i \"%1\" -o IdentitiesOnly=yes -o BatchMode=no -o ConnectTimeout=10")
                     .arg(sshKeyPath);
                 qputenv("LIBVIRT_SSH", sshCmd.toUtf8());
+                emit connectionProgress(tr("Authenticating with SSH key..."));
             }
-            
+
             authHelper.cbdata = &authData;
+            emit connectionProgress(tr("Connecting to libvirt..."));
             conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &authHelper, 0);
-            
+
             if (!sshKeyPath.isEmpty()) {
                 if (originalLibvirtSsh.isEmpty()) {
                     qunsetenv("LIBVIRT_SSH");
@@ -272,7 +294,7 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
                 }
             }
         }
-        
+
         if (conn) {
             virConnectClose(conn);
             return true;
@@ -288,7 +310,7 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
         return false;
 #endif
     });
-    
+
     watcher->setFuture(future);
 }
 
@@ -372,6 +394,10 @@ Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
         return nullptr;
     }
 
+    qDebug() << "defineDomain: Connection URI:" << m_uri;
+    qDebug() << "defineDomain: Connection state:" << state();
+    qDebug() << "defineDomain: XML length:" << xml.length();
+
     // Define the domain from XML
     virDomainPtr domainPtr = virDomainDefineXML(m_conn, xml.toUtf8().constData());
     if (!domainPtr) {
@@ -381,7 +407,8 @@ Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
         } else if (errorOutput) {
             *errorOutput = tr("Failed to define domain");
         }
-        qWarning() << "Failed to define domain:" << (err ? QString::fromUtf8(err->message) : "unknown error");
+        qWarning() << "defineDomain: virDomainDefineXML failed:" << (err ? QString::fromUtf8(err->message) : "unknown error");
+        qWarning() << "defineDomain: XML was:\n" << xml;
         return nullptr;
     }
 
@@ -391,7 +418,7 @@ Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
         if (errorOutput) {
             *errorOutput = tr("Defined domain has no name");
         }
-        qWarning() << "Defined domain has no name, freeing";
+        qWarning() << "defineDomain: Defined domain has no name, freeing";
         virDomainFree(domainPtr);
         return nullptr;
     }
@@ -401,7 +428,7 @@ Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
         if (errorOutput) {
             *errorOutput = tr("Domain '%1' already exists").arg(QString::fromUtf8(name));
         }
-        qWarning() << "Domain" << name << "already exists in cache";
+        qWarning() << "defineDomain: Domain" << name << "already exists in cache";
         virDomainFree(domainPtr);
         return nullptr;
     }
@@ -410,8 +437,10 @@ Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
     auto *domain = new Domain(this, domainPtr);
     m_domains[domain->name()] = domain;
 
-    qDebug() << "Defined new domain:" << domain->name();
+    qDebug() << "defineDomain: Defined new domain:" << domain->name() << "with state:" << domain->state();
+    qDebug() << "defineDomain: Emitting domainAdded signal for:" << domain->name();
     emit domainAdded(domain);
+    qDebug() << "defineDomain: domainAdded signal emitted, domain cache now has" << m_domains.count() << "domains";
 
     return domain;
 #else
@@ -773,13 +802,7 @@ void Connection::initAllResources()
                         delete domain;
                         continue;
                     }
-                    // Check if domain has valid state - skip if inaccessible
-                    if (domain->state() == Domain::StateNoState) {
-                        qWarning() << "Domain" << domain->name() << "has no valid state, skipping (may be inaccessible)";
-                        delete domain;
-                        virDomainFree(domainPtr);
-                        continue;
-                    }
+                    // Add domain regardless of state - newly created VMs may have StateNoState temporarily
                     m_domains[domain->name()] = domain;
                     qDebug() << "Added active domain:" << domain->name();
                     emit domainAdded(domain);
@@ -814,13 +837,7 @@ void Connection::initAllResources()
                         delete domain;
                         continue;
                     }
-                    // Check if domain has valid state - skip if inaccessible
-                    if (domain->state() == Domain::StateNoState) {
-                        qWarning() << "Domain" << domain->name() << "has no valid state, skipping (may be inaccessible)";
-                        delete domain;
-                        virDomainFree(domainPtr);
-                        continue;
-                    }
+                    // Add domain regardless of state - newly created VMs may have StateNoState temporarily
                     m_domains[domain->name()] = domain;
                     qDebug() << "Added inactive domain:" << domain->name();
                     emit domainAdded(domain);
@@ -1016,9 +1033,10 @@ void Connection::pollDomains()
 
                         if (!m_domains.contains(domainName)) {
                             auto *domain = new Domain(this, domainPtr);
-                            // Check if domain has valid state - skip if inaccessible
-                            if (domain->state() == Domain::StateNoState || domain->name().isEmpty()) {
-                                qWarning() << "Poll: Domain" << domainName << "has no valid state or empty name, skipping";
+                            // Check if domain has valid name - skip if empty
+                            // Don't skip based on state alone as newly created VMs may have StateNoState temporarily
+                            if (domain->name().isEmpty()) {
+                                qWarning() << "Poll: Domain" << domainName << "has no valid name, skipping";
                                 delete domain;
                                 virDomainFree(domainPtr);
                                 continue;
@@ -1056,9 +1074,10 @@ void Connection::pollDomains()
                     virDomainPtr domainPtr = virDomainLookupByName(m_conn, domainNames[i]);
                     if (domainPtr) {
                         auto *domain = new Domain(this, domainPtr);
-                        // Check if domain has valid state - skip if inaccessible
-                        if (domain->state() == Domain::StateNoState || domain->name().isEmpty()) {
-                            qWarning() << "Poll: Domain" << domainName << "has no valid state or empty name, skipping";
+                        // Check if domain has valid name - skip if empty
+                        // Don't skip based on state alone as newly created VMs may have StateNoState temporarily
+                        if (domain->name().isEmpty()) {
+                            qWarning() << "Poll: Domain" << domainName << "has no valid name, skipping";
                             delete domain;
                             virDomainFree(domainPtr);
                             continue;

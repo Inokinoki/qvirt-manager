@@ -219,6 +219,7 @@ add_library(qvirt-ui
     ui/models/VMListModel.cpp
     ui/models/VMProxyModel.cpp
     ui/dialogs/ConnectionDialog.cpp
+    ui/dialogs/ConnectionProgressDialog.cpp
     ui/dialogs/AddHardwareDialog.cpp
     ui/dialogs/CustomizeGuestDialog.cpp
     ui/dialogs/HostDialog.cpp

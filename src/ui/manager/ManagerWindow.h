@@ -32,6 +32,7 @@
 namespace QVirt {
 
 class KeyboardShortcuts;
+class ConnectionProgressDialog;
 
 /**
  * @brief Main manager window
@@ -130,6 +131,9 @@ private:
 
     // Pending connections (URI -> Connection)
     QMap<QString, Connection *> m_connectingConnections;
+
+    // Progress dialog for async connections
+    ConnectionProgressDialog *m_progressDialog;
 };
 
 } // namespace QVirt

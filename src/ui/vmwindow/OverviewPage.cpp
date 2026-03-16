@@ -200,10 +200,18 @@ void OverviewPage::updateStats()
     m_cpuUsageBar->setValue(static_cast<int>(cpuPercent));
     m_cpuUsageBar->setFormat(QString("%1%").arg(cpuPercent, 0, 'f', 1));
 
-    // Calculate memory usage percentage
+    // Calculate memory usage percentage - only meaningful for running VMs
+    // For stopped/paused VMs, show 0% as no actual memory is being consumed
     quint64 currentMem = m_domain->currentMemory();
     quint64 maxMem = m_domain->maxMemory();
-    float memPercent = maxMem > 0 ? (static_cast<float>(currentMem) / maxMem) * 100.0f : 0.0f;
+    float memPercent = 0.0f;
+
+    if (m_domain->state() == Domain::StateRunning) {
+        // For running VMs, show actual memory usage
+        // Note: currentMemory reflects actual usage for running VMs
+        memPercent = maxMem > 0 ? (static_cast<float>(currentMem) / maxMem) * 100.0f : 0.0f;
+    }
+    // For stopped/paused VMs, memPercent stays at 0.0f
 
     m_memoryUsageBar->setValue(static_cast<int>(memPercent));
     m_memoryUsageBar->setFormat(QString("%1 MB (%2%)")
@@ -217,10 +225,16 @@ void OverviewPage::refreshPerformanceGraphs()
     float cpuPercent = m_domain->cpuUsage();
     m_cpuGraph->addValue(cpuPercent);
 
-    // Update memory graph with current usage percentage
-    quint64 currentMem = m_domain->currentMemory();
-    quint64 maxMem = m_domain->maxMemory();
-    float memPercent = maxMem > 0 ? (static_cast<float>(currentMem) / maxMem) * 100.0f : 0.0f;
+    // Update memory graph with current usage percentage - only for running VMs
+    // For stopped/paused VMs, show 0% as no actual memory is being consumed
+    float memPercent = 0.0f;
+
+    if (m_domain->state() == Domain::StateRunning) {
+        quint64 currentMem = m_domain->currentMemory();
+        quint64 maxMem = m_domain->maxMemory();
+        memPercent = maxMem > 0 ? (static_cast<float>(currentMem) / maxMem) * 100.0f : 0.0f;
+    }
+
     m_memoryGraph->addValue(memPercent);
 }
 

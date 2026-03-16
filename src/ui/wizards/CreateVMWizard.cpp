@@ -85,11 +85,24 @@ void CreateVMWizard::onCurrentIdChanged(int id)
         // On Summary page, show only Back, Finish, Cancel
         setButtonText(QWizard::BackButton, "< Back");
         setButtonLayout({BackButton, Stretch, FinishButton, CancelButton});
+
+        // Ensure Finish button triggers validation
+        setOption(QWizard::NoDefaultButton, false);
     }
 }
 
 bool CreateVMWizard::validateCurrentPage()
 {
+    qDebug() << "CreateVMWizard::validateCurrentPage() called, currentId:" << currentId();
+
+    // Call the current page's validatePage() explicitly
+    if (QWizardPage *currentPage = page(currentId())) {
+        qDebug() << "validateCurrentPage: Calling validatePage on page:" << currentPage->metaObject()->className();
+        bool valid = currentPage->validatePage();
+        qDebug() << "validateCurrentPage: validatePage returned:" << valid;
+        return valid;
+    }
+
     // Basic validation - can be extended per page
     return true;
 }
@@ -1004,14 +1017,22 @@ void SummaryPage::updateSummary()
 
 bool SummaryPage::validatePage()
 {
+    qDebug() << "SummaryPage::validatePage() called";
+
     // This is where we actually create the VM
     QString vmName = m_wizard->vmName();
+
+    qDebug() << "validatePage: VM name:" << vmName;
+    qDebug() << "validatePage: Showing confirmation dialog";
 
     auto reply = QMessageBox::question(this, "Create Virtual Machine",
         "Are you sure you want to create the virtual machine '" + vmName + "'?",
         QMessageBox::Yes | QMessageBox::No);
 
+    qDebug() << "validatePage: User replied:" << (reply == QMessageBox::Yes ? "Yes" : "No");
+
     if (reply == QMessageBox::Yes) {
+        qDebug() << "validatePage: Creating Guest object";
         // Create Guest object from wizard data
         auto *guest = new Guest(m_connection, this);
 
@@ -1120,7 +1141,9 @@ bool SummaryPage::validatePage()
 
         // Define the VM in libvirt
         QString error;
+        qDebug() << "Calling defineDomain for VM:" << guest->name();
         auto *domain = m_connection->defineDomain(xml, &error);
+        qDebug() << "defineDomain returned:" << (domain ? "success" : "failure");
         if (!domain) {
             QMessageBox::critical(this, "Failed to Create VM",
                 "Failed to define the virtual machine:\n" + error);

@@ -580,24 +580,30 @@ void ConnectionTreeModel::onConnectionStateChanged(Connection::State state)
 
 void ConnectionTreeModel::onDomainAdded(Domain *domain)
 {
+    qDebug() << "ConnectionTreeModel::onDomainAdded called for domain:" << (domain ? domain->name() : "null");
+
     if (!domain || !domain->connection()) {
+        qWarning() << "onDomainAdded: domain or connection is null, ignoring";
         return;
     }
 
     Connection *conn = domain->connection();
     TreeItem *connItem = findConnectionItem(conn);
     if (!connItem) {
+        qWarning() << "onDomainAdded: connection item not found for connection:" << conn->uri();
         return;
     }
 
     // Check for duplicates
     if (findVMItem(connItem, domain)) {
+        qDebug() << "onDomainAdded: domain already exists in tree, ignoring:" << domain->name();
         return;
     }
 
     QModelIndex connIndex = index(connItem->row(), 0, QModelIndex());
     int row = connItem->children().count();
 
+    qDebug() << "onDomainAdded: Adding domain" << domain->name() << "to tree at row" << row;
     beginInsertRows(connIndex, row, row);
 
     TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), connItem);
@@ -609,6 +615,7 @@ void ConnectionTreeModel::onDomainAdded(Domain *domain)
             this, &ConnectionTreeModel::onDomainStateChanged);
 
     endInsertRows();
+    qDebug() << "onDomainAdded: Domain" << domain->name() << "added to tree successfully. Children count:" << connItem->children().count();
 }
 
 void ConnectionTreeModel::onDomainRemoved(Domain *domain)

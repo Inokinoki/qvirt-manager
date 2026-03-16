@@ -78,6 +78,8 @@ void Domain::updateInfo()
     if (ret < 0) {
         qWarning() << "Failed to get domain info for" << m_name << "- domain may be inaccessible";
         // Don't return early - keep the domain but mark as inaccessible
+        // However, we should still try to get the state from the domain directly
+        // For a newly defined (shut off) VM, virDomainGetInfo may fail but the domain is still valid
         return;
     }
 

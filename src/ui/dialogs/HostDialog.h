@@ -21,6 +21,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QTimer>
 
 #include "../../libvirt/Connection.h"
 
@@ -75,6 +76,8 @@ private:
     // Performance page
     QProgressBar *m_cpuUsageBar;
     QProgressBar *m_memoryUsageBar;
+    QLabel *m_cpuUsageLabel;
+    QLabel *m_memoryUsageLabel;
     QLabel *m_runningVMsLabel;
     QLabel *m_totalVMsLabel;
     QLabel *m_activeInterfacesLabel;
@@ -85,6 +88,9 @@ private:
 
     // Buttons
     QPushButton *m_btnRefresh;
+
+    // Auto-refresh timer
+    QTimer *m_refreshTimer;
 };
 
 } // namespace QVirt

@@ -31,12 +31,18 @@ namespace QVirt {
 HostDialog::HostDialog(Connection *conn, QWidget *parent)
     : QDialog(parent)
     , m_connection(conn)
+    , m_refreshTimer(nullptr)
 {
     setWindowTitle("Host Details");
     setMinimumSize(700, 500);
 
     setupUI();
     refresh();
+
+    // Setup auto-refresh timer (every 2 seconds)
+    m_refreshTimer = new QTimer(this);
+    connect(m_refreshTimer, &QTimer::timeout, this, &HostDialog::refresh);
+    m_refreshTimer->start(2000);
 }
 
 void HostDialog::setupUI()
@@ -137,16 +143,28 @@ void HostDialog::setupPerformancePage()
     auto *usageGroup = new QGroupBox("Resource Usage");
     auto *usageLayout = new QFormLayout(usageGroup);
 
+    // CPU Usage row with progress bar and percentage label
+    auto *cpuLayout = new QHBoxLayout();
     m_cpuUsageBar = new QProgressBar();
     m_cpuUsageBar->setRange(0, 100);
-    m_cpuUsageBar->setTextVisible(true);
+    m_cpuUsageBar->setTextVisible(false);
+    m_cpuUsageLabel = new QLabel("0%");
+    m_cpuUsageLabel->setMinimumWidth(50);
+    cpuLayout->addWidget(m_cpuUsageBar, 1);
+    cpuLayout->addWidget(m_cpuUsageLabel);
 
+    // Memory Usage row with progress bar and percentage label
+    auto *memLayout = new QHBoxLayout();
     m_memoryUsageBar = new QProgressBar();
     m_memoryUsageBar->setRange(0, 100);
-    m_memoryUsageBar->setTextVisible(true);
+    m_memoryUsageBar->setTextVisible(false);
+    m_memoryUsageLabel = new QLabel("0%");
+    m_memoryUsageLabel->setMinimumWidth(50);
+    memLayout->addWidget(m_memoryUsageBar, 1);
+    memLayout->addWidget(m_memoryUsageLabel);
 
-    usageLayout->addRow("CPU Usage:", m_cpuUsageBar);
-    usageLayout->addRow("Memory Usage:", m_memoryUsageBar);
+    usageLayout->addRow("CPU Usage:", cpuLayout);
+    usageLayout->addRow("Memory Usage:", memLayout);
 
     layout->addWidget(usageGroup);
 
@@ -394,12 +412,23 @@ void HostDialog::updatePerformance()
         return;
     }
 
-    // Note: Real-time CPU and memory usage stats require more complex querying
-    // For now, set to 0 as placeholder
-    m_cpuUsageBar->setValue(0);
-    m_memoryUsageBar->setValue(0);
+    // Get host CPU usage (needs two calls with time between them)
+    // First call to establish baseline
+    m_connection->getHostCPUUsage();
+    // Small delay for CPU stats calculation (will be calculated on next call)
+    // For now, just show the cached value
+    int cpuUsage = m_connection->getHostCPUUsage();
+    m_cpuUsageBar->setValue(cpuUsage);
+    m_cpuUsageLabel->setText(QString("%1%").arg(cpuUsage));
 
-    // Get VM counts
+    // Get host memory usage
+    unsigned long long memTotal = m_connection->getHostMemoryTotal();
+    unsigned long long memUsed = m_connection->getHostMemoryUsed();
+    int memPercentage = (memTotal > 0) ? ((memUsed * 100) / memTotal) : 0;
+    m_memoryUsageBar->setValue(memPercentage);
+    m_memoryUsageLabel->setText(QString("%1%").arg(memPercentage));
+
+    // Get VM counts (use cached data, don't refresh to avoid race conditions)
     QList<Domain*> domains = m_connection->domains();
     int runningVMs = 0;
     for (Domain *domain : domains) {

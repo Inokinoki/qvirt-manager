@@ -10,7 +10,7 @@
  */
 
 #ifndef QVIRT_UI_DIALOGS_DELETEDIALOG_H
-#define QVIRT_UI_DIALOGS_DELETEDDIALOG_H
+#define QVIRT_UI_DIALOGS_DELETEDIALOG_H
 
 #include <QDialog>
 #include <QCheckBox>

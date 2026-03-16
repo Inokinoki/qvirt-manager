@@ -117,6 +117,11 @@ public:
     QString capabilities() const;
     QString libvirtVersion() const;
 
+    // Host statistics
+    int getHostCPUUsage();  // Returns percentage 0-100
+    unsigned long long getHostMemoryTotal();  // In KB
+    unsigned long long getHostMemoryUsed();   // In KB
+
     // Polling control
     bool isPollingEnabled() const { return m_pollingEnabled; }
     void setPollingEnabled(bool enabled) { m_pollingEnabled = enabled; }
@@ -172,6 +177,11 @@ signals:
     QMap<QString, Network *> m_networks;
     QMap<QString, StoragePool *> m_storagePools;
     QMap<QString, NodeDevice *> m_nodeDevices;
+
+    // Cached host stats for CPU usage calculation
+    unsigned long long m_lastCPUTime;
+    unsigned long long m_lastIdleTime;
+    int m_lastCPUUsage;
 };
 
 } // namespace QVirt

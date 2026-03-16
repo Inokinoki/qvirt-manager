@@ -68,7 +68,7 @@ public:
  private slots:
     void onCurrentIdChanged(int id);
     void onCustomizeClicked();
-    bool validateCurrentPage();
+    bool validateCurrentPage() override;
 
 private:
     void setupPages();

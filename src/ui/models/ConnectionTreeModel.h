@@ -91,7 +91,8 @@ public:
         IsVMRole,
         DomainRole,
         ConnectionRole,
-        IconRole
+        IconRole,
+        IsCachedRole
     };
 
     explicit ConnectionTreeModel(QObject *parent = nullptr);

@@ -51,6 +51,9 @@ private slots:
 private:
     void setupUI();
     void populateDeviceTree();
+    void updateReadOnlyMode();
+    QLabel *m_readOnlyLabel;
+    bool m_readOnly;
     QTreeWidgetItem* addDeviceCategory(const QString &name, const QString &icon);
     QTreeWidgetItem* addDevice(QTreeWidgetItem *parent, const QString &name, const QString &details);
     QString getDeviceXML(const QString &categoryName);

@@ -15,6 +15,7 @@
 #include "StoragePool.h"
 #include "NodeDevice.h"
 #include "../core/Error.h"
+#include "../core/Config.h"
 #include <QDebug>
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
@@ -216,19 +217,41 @@ Connection *Connection::create(const QString &uri)
     return new Connection(uri);
 }
 
+Connection *Connection::createDisconnected(const QString &uri)
+{
+    return new Connection(uri, true);  // Internal constructor, no connection attempt
+}
+
+// Internal constructor - creates Connection object without attempting to connect
+Connection::Connection(const QString &uri, bool /* internal */)
+    : BaseObject()
+    , m_uri(uri)
+    , m_state(Disconnected)
+    , m_conn(nullptr)
+    , m_tickCounter(0)
+    , m_initialPoll(true)
+    , m_pollingEnabled(true)
+    , m_lastCPUTime(0)
+    , m_lastIdleTime(0)
+    , m_lastCPUUsage(0)
+{
+    // Do not attempt to open connection - used for cached VM display only
+}
+
 void Connection::openAsync(const QString &sshKeyPath, const QString &password)
 {
     m_state = Connecting;
     emit stateChanged(m_state);
 
     auto *watcher = new QFutureWatcher<bool>(this);
-    
+
     connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
         bool success = watcher->result();
-        
+
         if (success) {
             m_state = Active;
             m_connectionError.clear();
+            emit connectionProgress(tr("Connection established"));
             qDebug() << "Async connection to" << m_uri << "succeeded";
         } else {
             m_state = ConnectionFailed;
@@ -237,7 +260,7 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
             }
             qWarning() << "Async connection to" << m_uri << "failed:" << m_connectionError;
         }
-        
+
         emit stateChanged(m_state);
         watcher->deleteLater();
     });
@@ -245,25 +268,46 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
     QFuture<bool> future = QtConcurrent::run([this, sshKeyPath, password]() -> bool {
 #ifdef LIBVIRT_FOUND
         virConnectPtr conn = nullptr;
-        
+
+        // Extract hostname for status messages
+        QString hostname = m_uri;
+        if (hostname.contains("://")) {
+            hostname = hostname.split("://")[1];
+            if (hostname.contains("/")) {
+                hostname = hostname.split("/")[0];
+            }
+            if (hostname.contains("@")) {
+                hostname = hostname.split("@")[1];
+            }
+            if (hostname.contains(":")) {
+                hostname = hostname.split(":")[0];
+            }
+        }
+
         if (sshKeyPath.isEmpty() && password.isEmpty()) {
+            emit connectionProgress(tr("Connecting to %1...").arg(m_uri));
             conn = virConnectOpen(m_uri.toUtf8().constData());
         } else {
             ConnectionAuthData authData;
             authData.password = password;
             authData.sshKeyPath = sshKeyPath;
-            
+
+            // Show SSH connection status
+            emit connectionProgress(tr("Connecting via SSH to %1...").arg(hostname));
+
             QByteArray originalLibvirtSsh;
             if (!sshKeyPath.isEmpty()) {
                 originalLibvirtSsh = qgetenv("LIBVIRT_SSH");
                 QString sshCmd = QString("ssh -i \"%1\" -o IdentitiesOnly=yes -o BatchMode=no -o ConnectTimeout=10")
                     .arg(sshKeyPath);
                 qputenv("LIBVIRT_SSH", sshCmd.toUtf8());
+                emit connectionProgress(tr("Authenticating with SSH key..."));
             }
-            
+
             authHelper.cbdata = &authData;
+            emit connectionProgress(tr("Connecting to libvirt..."));
             conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &authHelper, 0);
-            
+
             if (!sshKeyPath.isEmpty()) {
                 if (originalLibvirtSsh.isEmpty()) {
                     qunsetenv("LIBVIRT_SSH");
@@ -272,7 +316,7 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
                 }
             }
         }
-        
+
         if (conn) {
             virConnectClose(conn);
             return true;
@@ -288,7 +332,7 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
         return false;
 #endif
     });
-    
+
     watcher->setFuture(future);
 }
 
@@ -311,6 +355,9 @@ void Connection::close()
     if (!m_conn) {
         return;  // Already closed
     }
+
+    // Save VM cache before closing
+    saveVMCache();
 
     // Clean up cached objects
     for (auto *domain : m_domains) {
@@ -360,6 +407,74 @@ Domain *Connection::getDomainByUUID(const QString &uuid)
         }
     }
     return nullptr;
+}
+
+Domain *Connection::defineDomain(const QString &xml, QString *errorOutput)
+{
+#ifdef LIBVIRT_FOUND
+    if (!m_conn) {
+        if (errorOutput) {
+            *errorOutput = tr("Connection is not open");
+        }
+        return nullptr;
+    }
+
+    qDebug() << "defineDomain: Connection URI:" << m_uri;
+    qDebug() << "defineDomain: Connection state:" << state();
+    qDebug() << "defineDomain: XML length:" << xml.length();
+
+    // Define the domain from XML
+    virDomainPtr domainPtr = virDomainDefineXML(m_conn, xml.toUtf8().constData());
+    if (!domainPtr) {
+        virErrorPtr err = virGetLastError();
+        if (errorOutput && err) {
+            *errorOutput = QString::fromUtf8(err->message);
+        } else if (errorOutput) {
+            *errorOutput = tr("Failed to define domain");
+        }
+        qWarning() << "defineDomain: virDomainDefineXML failed:" << (err ? QString::fromUtf8(err->message) : "unknown error");
+        qWarning() << "defineDomain: XML was:\n" << xml;
+        return nullptr;
+    }
+
+    // Get the domain name from the pointer
+    const char *name = virDomainGetName(domainPtr);
+    if (!name || QString::fromUtf8(name).isEmpty()) {
+        if (errorOutput) {
+            *errorOutput = tr("Defined domain has no name");
+        }
+        qWarning() << "defineDomain: Defined domain has no name, freeing";
+        virDomainFree(domainPtr);
+        return nullptr;
+    }
+
+    // Check if domain already exists in cache
+    if (m_domains.contains(QString::fromUtf8(name))) {
+        if (errorOutput) {
+            *errorOutput = tr("Domain '%1' already exists").arg(QString::fromUtf8(name));
+        }
+        qWarning() << "defineDomain: Domain" << name << "already exists in cache";
+        virDomainFree(domainPtr);
+        return nullptr;
+    }
+
+    // Create Domain object and add to cache
+    auto *domain = new Domain(this, domainPtr);
+    m_domains[domain->name()] = domain;
+
+    qDebug() << "defineDomain: Defined new domain:" << domain->name() << "with state:" << domain->state();
+    qDebug() << "defineDomain: Emitting domainAdded signal for:" << domain->name();
+    emit domainAdded(domain);
+    qDebug() << "defineDomain: domainAdded signal emitted, domain cache now has" << m_domains.count() << "domains";
+
+    return domain;
+#else
+    Q_UNUSED(xml);
+    if (errorOutput) {
+        *errorOutput = tr("libvirt not available");
+    }
+    return nullptr;
+#endif
 }
 
 QList<Network *> Connection::networks() const
@@ -674,6 +789,14 @@ void Connection::initAllResources()
     }
     m_nodeDevices.clear();
 
+    // Only load from cache if connection is not open
+    // When connected, we load live data directly to avoid duplicate emissions
+    if (!isOpen()) {
+        loadVMCache();
+        qDebug() << "Connection not open, only loaded cached VMs for" << m_uri;
+        return;
+    }
+
     // List all domains (active and inactive)
     int numDomains = virConnectNumOfDomains(m_conn);
     int numInactiveDomains = virConnectNumOfDefinedDomains(m_conn);
@@ -691,6 +814,9 @@ void Connection::initAllResources()
         numInactiveDomains = 0;
     }
 
+    // Track which cached domains we've found to remove stale entries later
+    QSet<QString> foundDomainNames;
+
     // Get active domains
     if (numDomains > 0) {
         int *domainIds = new int[numDomains];
@@ -706,19 +832,25 @@ void Connection::initAllResources()
                         virDomainFree(domainPtr);
                         continue;
                     }
+                    QString domainName = QString::fromUtf8(name);
+                    foundDomainNames.insert(domainName);
+
+                    // Check if domain exists in cache
+                    auto *existingDomain = m_domains.value(domainName, nullptr);
+                    if (existingDomain) {
+                        // Update existing cached domain with fresh data
+                        qDebug() << "Updating cached domain:" << domainName;
+                        delete existingDomain;
+                        m_domains.remove(domainName);
+                    }
+
                     auto *domain = new Domain(this, domainPtr);
                     if (domain->name().isEmpty()) {
                         qWarning() << "Domain wrapper created with empty name, skipping";
                         delete domain;
                         continue;
                     }
-                    // Check if domain has valid state - skip if inaccessible
-                    if (domain->state() == Domain::StateNoState) {
-                        qWarning() << "Domain" << domain->name() << "has no valid state, skipping (may be inaccessible)";
-                        delete domain;
-                        virDomainFree(domainPtr);
-                        continue;
-                    }
+                    // Add domain regardless of state - newly created VMs may have StateNoState temporarily
                     m_domains[domain->name()] = domain;
                     qDebug() << "Added active domain:" << domain->name();
                     emit domainAdded(domain);
@@ -747,19 +879,25 @@ void Connection::initAllResources()
                         virDomainFree(domainPtr);
                         continue;
                     }
+                    QString domainName = QString::fromUtf8(name);
+                    foundDomainNames.insert(domainName);
+
+                    // Check if domain exists in cache
+                    auto *existingDomain = m_domains.value(domainName, nullptr);
+                    if (existingDomain) {
+                        // Update existing cached domain with fresh data
+                        qDebug() << "Updating cached domain:" << domainName;
+                        delete existingDomain;
+                        m_domains.remove(domainName);
+                    }
+
                     auto *domain = new Domain(this, domainPtr);
                     if (domain->name().isEmpty()) {
                         qWarning() << "Domain wrapper created with empty name, skipping";
                         delete domain;
                         continue;
                     }
-                    // Check if domain has valid state - skip if inaccessible
-                    if (domain->state() == Domain::StateNoState) {
-                        qWarning() << "Domain" << domain->name() << "has no valid state, skipping (may be inaccessible)";
-                        delete domain;
-                        virDomainFree(domainPtr);
-                        continue;
-                    }
+                    // Add domain regardless of state - newly created VMs may have StateNoState temporarily
                     m_domains[domain->name()] = domain;
                     qDebug() << "Added inactive domain:" << domain->name();
                     emit domainAdded(domain);
@@ -774,11 +912,31 @@ void Connection::initAllResources()
         delete[] domainNames;
     }
 
+    // Remove cached domains that no longer exist on the host
+    QStringList staleDomains;
+    for (auto it = m_domains.begin(); it != m_domains.end(); ++it) {
+        if (!foundDomainNames.contains(it.key())) {
+            staleDomains.append(it.key());
+        }
+    }
+
+    for (const QString &name : staleDomains) {
+        Domain *domain = m_domains.take(name);
+        if (domain) {
+            qDebug() << "Removing stale cached domain:" << name;
+            emit domainRemoved(domain);
+            delete domain;
+        }
+    }
+
     if (m_domains.isEmpty()) {
         qDebug() << "No domains found on remote host";
     } else {
         qDebug() << "Total domains loaded:" << m_domains.count();
     }
+
+    // Save updated cache after refreshing from libvirt
+    saveVMCache();
 
     // List networks
     int numNetworks = virConnectNumOfNetworks(m_conn);
@@ -955,9 +1113,10 @@ void Connection::pollDomains()
 
                         if (!m_domains.contains(domainName)) {
                             auto *domain = new Domain(this, domainPtr);
-                            // Check if domain has valid state - skip if inaccessible
-                            if (domain->state() == Domain::StateNoState || domain->name().isEmpty()) {
-                                qWarning() << "Poll: Domain" << domainName << "has no valid state or empty name, skipping";
+                            // Check if domain has valid name - skip if empty
+                            // Don't skip based on state alone as newly created VMs may have StateNoState temporarily
+                            if (domain->name().isEmpty()) {
+                                qWarning() << "Poll: Domain" << domainName << "has no valid name, skipping";
                                 delete domain;
                                 virDomainFree(domainPtr);
                                 continue;
@@ -995,9 +1154,10 @@ void Connection::pollDomains()
                     virDomainPtr domainPtr = virDomainLookupByName(m_conn, domainNames[i]);
                     if (domainPtr) {
                         auto *domain = new Domain(this, domainPtr);
-                        // Check if domain has valid state - skip if inaccessible
-                        if (domain->state() == Domain::StateNoState || domain->name().isEmpty()) {
-                            qWarning() << "Poll: Domain" << domainName << "has no valid state or empty name, skipping";
+                        // Check if domain has valid name - skip if empty
+                        // Don't skip based on state alone as newly created VMs may have StateNoState temporarily
+                        if (domain->name().isEmpty()) {
+                            qWarning() << "Poll: Domain" << domainName << "has no valid name, skipping";
                             delete domain;
                             virDomainFree(domainPtr);
                             continue;
@@ -1196,6 +1356,103 @@ void Connection::pollStoragePools()
             delete pool;
         }
     }
+}
+
+// VM Cache management
+void Connection::saveVMCache() const
+{
+    auto *config = Config::instance();
+    for (auto *domain : m_domains) {
+        if (domain && !domain->uuid().isEmpty()) {
+            Domain::CacheInfo domainInfo = domain->toCacheInfo();
+            // Convert Domain::CacheInfo to VMCacheInfo
+            VMCacheInfo info;
+            info.name = domainInfo.name;
+            info.uuid = domainInfo.uuid;
+            info.state = domainInfo.state;
+            info.description = domainInfo.description;
+            info.title = domainInfo.title;
+            info.memory = domainInfo.memory;
+            info.currentMemory = domainInfo.currentMemory;
+            info.vcpuCount = domainInfo.vcpuCount;
+            info.maxVcpuCount = domainInfo.maxVcpuCount;
+            info.xmlDesc = domainInfo.xmlDesc;
+            info.lastUpdated = domainInfo.lastUpdated;
+            config->saveVMCache(m_uri, domain->uuid(), info);
+        }
+    }
+    qDebug() << "Saved VM cache for connection:" << m_uri;
+}
+
+void Connection::loadVMCache()
+{
+    qWarning() << "=== loadVMCache START ===";
+    qWarning() << "Connection URI:" << m_uri;
+
+    auto *config = Config::instance();
+    QList<VMCacheInfo> cachedVMs = config->loadAllVMCache(m_uri);
+
+    qWarning() << "Loading" << cachedVMs.size() << "VMs from cache for connection:" << m_uri;
+    qWarning() << "Connection m_domains count before load:" << m_domains.count();
+
+    if (cachedVMs.isEmpty()) {
+        qWarning() << "WARNING: No cached VMs found for URI:" << m_uri;
+    }
+
+    for (const VMCacheInfo &cacheInfo : cachedVMs) {
+        qWarning() << "Processing cached VM:" << cacheInfo.name << "(" << cacheInfo.uuid << ")";
+
+        // Check if domain already exists in cache (by UUID)
+        bool found = false;
+        for (auto *domain : m_domains) {
+            if (domain && domain->uuid() == cacheInfo.uuid) {
+                found = true;
+                break;
+            }
+        }
+
+        if (found) {
+            qWarning() << "Skipping cached VM" << cacheInfo.name << "- already have live data";
+            continue;
+        }
+
+        // Check if domain exists by name
+        if (m_domains.contains(cacheInfo.name)) {
+            qWarning() << "Skipping cached VM" << cacheInfo.name << "- already in cache by name";
+            continue;
+        }
+
+        // Convert VMCacheInfo to Domain::CacheInfo
+        Domain::CacheInfo domainCacheInfo;
+        domainCacheInfo.name = cacheInfo.name;
+        domainCacheInfo.uuid = cacheInfo.uuid;
+        domainCacheInfo.state = cacheInfo.state;
+        domainCacheInfo.description = cacheInfo.description;
+        domainCacheInfo.title = cacheInfo.title;
+        domainCacheInfo.memory = cacheInfo.memory;
+        domainCacheInfo.vcpuCount = cacheInfo.vcpuCount;
+        domainCacheInfo.xmlDesc = cacheInfo.xmlDesc;
+        domainCacheInfo.lastUpdated = cacheInfo.lastUpdated;
+
+        // Create domain from cache info
+        Domain *domain = Domain::fromCacheInfo(this, domainCacheInfo);
+        if (domain) {
+            m_domains[cacheInfo.name] = domain;
+            qWarning() << "Loaded VM from cache:" << cacheInfo.name << "(" << cacheInfo.uuid << ")";
+            emit domainAdded(domain);
+        } else {
+            qWarning() << "FAILED to create domain from cache:" << cacheInfo.name;
+        }
+    }
+    qWarning() << "Connection m_domains count after load:" << m_domains.count();
+    qWarning() << "=== loadVMCache END ===";
+}
+
+void Connection::clearVMCache() const
+{
+    auto *config = Config::instance();
+    config->clearVMCache(m_uri);
+    qDebug() << "Cleared VM cache for connection:" << m_uri;
 }
 
 } // namespace QVirt

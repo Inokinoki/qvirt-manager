@@ -12,6 +12,7 @@
 #include "DetailsPage.h"
 #include "../dialogs/AddHardwareDialog.h"
 #include "../../core/Error.h"
+#include "../../libvirt/EnumMapper.h"
 
 #include <QHeaderView>
 #include <QMessageBox>
@@ -23,9 +24,11 @@ namespace QVirt {
 
 DetailsPage::DetailsPage(Domain *domain, QWidget *parent)
     : QWidget(parent)
+    , m_readOnly(false)
     , m_domain(domain)
 {
     setupUI();
+    updateReadOnlyMode();
     populateDeviceTree();
 }
 
@@ -54,6 +57,12 @@ void DetailsPage::setupUI()
 
     leftLayout->addWidget(m_deviceTree);
 
+    // Read-only warning label (hidden by default)
+    m_readOnlyLabel = new QLabel(leftPanel);
+    m_readOnlyLabel->setText("<b>Note:</b> This VM is loaded from cache (offline mode). Hardware configuration cannot be modified.");
+    m_readOnlyLabel->setWordWrap(true);
+    m_readOnlyLabel->setVisible(false);
+
     // Button layout
     auto *buttonLayout = new QHBoxLayout();
     buttonLayout->setSpacing(5);
@@ -71,6 +80,7 @@ void DetailsPage::setupUI()
     buttonLayout->addStretch();
     buttonLayout->addWidget(m_btnRefresh);
 
+    leftLayout->addWidget(m_readOnlyLabel);
     leftLayout->addLayout(buttonLayout);
 
     // Right panel - Device details
@@ -102,15 +112,51 @@ void DetailsPage::setupUI()
     mainLayout->addWidget(m_splitter);
 }
 
+void DetailsPage::updateReadOnlyMode()
+{
+    m_readOnly = m_domain->isCached();
+
+    // Show/hide read-only label
+    m_readOnlyLabel->setVisible(m_readOnly);
+
+    // Disable hardware modification buttons when in read-only mode
+    m_btnAddHardware->setEnabled(!m_readOnly);
+    m_btnRemoveHardware->setEnabled(!m_readOnly);
+
+    // Update tooltip to explain why buttons are disabled
+    if (m_readOnly) {
+        m_btnAddHardware->setToolTip("Cannot add hardware to cached VMs (offline mode)");
+        m_btnRemoveHardware->setToolTip("Cannot remove hardware from cached VMs (offline mode)");
+    } else {
+        m_btnAddHardware->setToolTip("");
+        m_btnRemoveHardware->setToolTip("");
+    }
+}
+
 void DetailsPage::populateDeviceTree()
 {
     m_deviceTree->clear();
+
+    // Parse domain XML once and reuse for all sections
+    QString xml = m_domain->getXMLDesc();
+    QDomDocument doc;
+    QString errorMsg;
+    int errorLine = 0, errorColumn = 0;
+    bool xmlValid = doc.setContent(xml, &errorMsg, &errorLine, &errorColumn);
 
     // Overview item (basic VM info)
     auto *overviewItem = addDeviceCategory("Overview", QString());
     addDevice(overviewItem, "Name", m_domain->name());
     addDevice(overviewItem, "UUID", m_domain->uuid());
-    addDevice(overviewItem, "State", QString::number(static_cast<int>(m_domain->state())));
+
+    // For cached VMs, show "Cached (Offline)" state
+    QString stateText;
+    if (m_domain->isCached()) {
+        stateText = "Cached (Offline)";
+    } else {
+        stateText = EnumMapper::stateToString(m_domain->state());
+    }
+    addDevice(overviewItem, "State", stateText);
     addDevice(overviewItem, "CPUs", QString::number(m_domain->vcpuCount()));
     addDevice(overviewItem, "Memory", QString("%1 MB").arg(m_domain->currentMemory() / 1024));
     overviewItem->setExpanded(true);
@@ -127,10 +173,9 @@ void DetailsPage::populateDeviceTree()
 
     // Boot section - parse from XML
     auto *bootItem = addDeviceCategory("Boot", "boot");
-    QDomDocument bootDoc;
-    QString bootXML = m_domain->getXMLDesc();
-    if (bootDoc.setContent(bootXML)) {
-        QDomElement root = bootDoc.documentElement();
+    bool hasBoot = false;
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
         QDomNodeList osElements = root.elementsByTagName("os");
         if (!osElements.isEmpty()) {
             QDomElement osElement = osElements.at(0).toElement();
@@ -144,45 +189,96 @@ void DetailsPage::populateDeviceTree()
                     addDevice(bootItem, QString("Boot Device %1").arg(i + 1), dev);
                 }
             }
-        } else {
-            addDevice(bootItem, "Boot Device", "hd (default)");
+            hasBoot = true;
         }
-    } else {
+    }
+    if (!hasBoot) {
         addDevice(bootItem, "Boot Device", "hd (default)");
     }
 
-    // Disks section
+    // Disks section - properly parse from XML
     auto *disksItem = addDeviceCategory("Disk Devices", "drive-harddisk");
-    // Parse domain XML to find disks
-    QString xml = m_domain->getXMLDesc();
-    if (xml.contains("<disk")) {
-        // This is a simplified check - in production you'd properly parse the XML
-        int count = xml.count("<disk ");
-        for (int i = 0; i < count; ++i) {
-            addDevice(disksItem, QString("Disk %1").arg(i + 1), "virtio disk");
+    bool hasDisks = false;
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
+        QDomNodeList diskNodes = root.elementsByTagName("disk");
+        for (int i = 0; i < diskNodes.size(); ++i) {
+            QDomElement diskElement = diskNodes.at(i).toElement();
+            QString device = diskElement.attribute("device", "disk");
+            QDomElement targetElem = diskElement.firstChildElement("target");
+            QString targetDev = targetElem.attribute("dev", "");
+            QDomElement sourceElem = diskElement.firstChildElement("source");
+            QString sourceFile = sourceElem.attribute("file", "");
+            if (sourceFile.isEmpty()) {
+                sourceFile = sourceElem.attribute("dev", "");
+            }
+
+            QString diskInfo = QString("%1 - %2").arg(device, targetDev);
+            if (!sourceFile.isEmpty()) {
+                diskInfo += QString(" (%1)").arg(sourceFile);
+            }
+            addDevice(disksItem, QString("Disk %1").arg(i + 1), diskInfo);
+            hasDisks = true;
         }
-    } else {
-        addDevice(disksItem, "No disks", "-");
+    }
+    if (!hasDisks) {
+        addDevice(disksItem, "No disk devices", "-");
     }
 
-    // Network section
+    // Network section - properly parse from XML
     auto *netItem = addDeviceCategory("Network Interfaces", "network-wired");
-    if (xml.contains("<interface")) {
-        int count = xml.count("<interface ");
-        for (int i = 0; i < count; ++i) {
-            addDevice(netItem, QString("NIC %1").arg(i + 1), "virtio");
+    bool hasNetwork = false;
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
+        QDomNodeList interfaceNodes = root.elementsByTagName("interface");
+        for (int i = 0; i < interfaceNodes.size(); ++i) {
+            QDomElement ifaceElement = interfaceNodes.at(i).toElement();
+            QString type = ifaceElement.attribute("type", "unknown");
+            QString typeDetail;
+
+            // Get type-specific details
+            QDomElement macElem = ifaceElement.firstChildElement("mac");
+            QString macAddr = macElem.attribute("address", "");
+
+            QDomElement sourceElem = ifaceElement.firstChildElement("source");
+            QString source = sourceElem.attribute("bridge", sourceElem.attribute("network", ""));
+
+            QDomElement targetElem = ifaceElement.firstChildElement("target");
+            QString target = targetElem.attribute("dev", "");
+
+            QDomElement modelElem = ifaceElement.firstChildElement("model");
+            QString model = modelElem.attribute("type", "");
+
+            if (type == "network") {
+                typeDetail = QString("network=%1").arg(source);
+            } else if (type == "bridge") {
+                typeDetail = QString("bridge=%1").arg(source);
+            } else if (type == "direct") {
+                typeDetail = QString("dev=%1").arg(source);
+            } else {
+                typeDetail = type;
+            }
+
+            if (!macAddr.isEmpty()) {
+                typeDetail += QString(", MAC=%1").arg(macAddr);
+            }
+            if (!model.isEmpty()) {
+                typeDetail += QString(", model=%1").arg(model);
+            }
+
+            addDevice(netItem, QString("Network %1").arg(i + 1), typeDetail);
+            hasNetwork = true;
         }
-    } else {
+    }
+    if (!hasNetwork) {
         addDevice(netItem, "No network interfaces", "-");
     }
 
     // Input section - parse from XML
     auto *inputItem = addDeviceCategory("Input", "input-keyboard");
-    QDomDocument inputDoc;
-    QString inputXML = m_domain->getXMLDesc();
     bool hasInputDevices = false;
-    if (inputDoc.setContent(inputXML)) {
-        QDomElement root = inputDoc.documentElement();
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
         QDomNodeList inputNodes = root.elementsByTagName("input");
         for (int i = 0; i < inputNodes.size(); ++i) {
             QDomElement inputElement = inputNodes.at(i).toElement();
@@ -198,11 +294,9 @@ void DetailsPage::populateDeviceTree()
 
     // Graphics section - parse from XML
     auto *gfxItem = addDeviceCategory("Display", "video-display");
-    QDomDocument gfxDoc;
-    QString gfxXML = m_domain->getXMLDesc();
     bool hasGraphics = false;
-    if (gfxDoc.setContent(gfxXML)) {
-        QDomElement root = gfxDoc.documentElement();
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
         // Parse graphics elements
         QDomNodeList graphicsNodes = root.elementsByTagName("graphics");
         for (int i = 0; i < graphicsNodes.size(); ++i) {
@@ -230,11 +324,9 @@ void DetailsPage::populateDeviceTree()
 
     // Sound section - parse from XML
     auto *soundItem = addDeviceCategory("Sound", "audio-card");
-    QDomDocument soundDoc;
-    QString soundXML = m_domain->getXMLDesc();
     bool hasSound = false;
-    if (soundDoc.setContent(soundXML)) {
-        QDomElement root = soundDoc.documentElement();
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
         QDomNodeList soundNodes = root.elementsByTagName("sound");
         for (int i = 0; i < soundNodes.size(); ++i) {
             QDomElement soundElement = soundNodes.at(i).toElement();
@@ -249,11 +341,9 @@ void DetailsPage::populateDeviceTree()
 
     // USB section - parse from XML
     auto *usbItem = addDeviceCategory("USB", "usb");
-    QDomDocument usbDoc;
-    QString usbXML = m_domain->getXMLDesc();
     bool hasUSB = false;
-    if (usbDoc.setContent(usbXML)) {
-        QDomElement root = usbDoc.documentElement();
+    if (xmlValid) {
+        QDomElement root = doc.documentElement();
         QDomNodeList controllerNodes = root.elementsByTagName("controller");
         for (int i = 0; i < controllerNodes.size(); ++i) {
             QDomElement controllerElement = controllerNodes.at(i).toElement();
@@ -407,6 +497,14 @@ void DetailsPage::onDeviceSelected(QTreeWidgetItem *item, int column)
 
 void DetailsPage::onAddHardware()
 {
+    // Prevent adding hardware in read-only mode
+    if (m_readOnly) {
+        QMessageBox::warning(this, "Cannot Add Hardware",
+            "Cannot add hardware to a VM loaded from cache (offline mode).\n\n"
+            "Connect to the hypervisor to modify VM configuration.");
+        return;
+    }
+
     auto *dialog = new AddHardwareDialog(m_domain, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
 
@@ -469,6 +567,14 @@ void DetailsPage::onAddHardware()
 
 void DetailsPage::onRemoveHardware()
 {
+    // Prevent removing hardware in read-only mode
+    if (m_readOnly) {
+        QMessageBox::warning(this, "Cannot Remove Hardware",
+            "Cannot remove hardware from a VM loaded from cache (offline mode).\n\n"
+            "Connect to the hypervisor to modify VM configuration.");
+        return;
+    }
+
     auto *item = m_deviceTree->currentItem();
     if (!item) {
         return;
@@ -626,6 +732,7 @@ QDomNode DetailsPage::findDeviceNode(QDomElement &devicesElement, const QString 
 void DetailsPage::refresh()
 {
     m_domain->updateInfo();
+    updateReadOnlyMode();
     populateDeviceTree();
 }
 

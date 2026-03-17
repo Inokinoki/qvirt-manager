@@ -10,6 +10,7 @@
  */
 
 #include "CreateVMWizard.h"
+#include "../dialogs/CustomizeGuestDialog.h"
 #include "../../core/Error.h"
 #include "../../libvirt/Guest.h"
 #include "../../devices/DiskDevice.h"
@@ -37,8 +38,8 @@ CreateVMWizard::CreateVMWizard(Connection *conn, QWidget *parent)
 
     // Set button text
     setButtonText(QWizard::CustomButton1, "Customize");
-    setButtonText(QWizard::FinishButton, "_Finish");
-    setButtonText(QWizard::CancelButton, "_Cancel");
+    setButtonText(QWizard::FinishButton, "Finish");
+    setButtonText(QWizard::CancelButton, "Cancel");
 
     setupPages();
     setupConnections();
@@ -68,25 +69,40 @@ void CreateVMWizard::setupConnections()
 
 void CreateVMWizard::onCustomizeClicked()
 {
-    // Jump to the summary page to review all settings
+    // This is now handled by the "Customize before install" checkbox on the summary page
+    // The button is kept for backwards compatibility but redirects to summary
     setCurrentId(Page_Summary);
 }
 
 void CreateVMWizard::onCurrentIdChanged(int id)
 {
     Q_UNUSED(id);
-    // Enable/disable Customize button based on current page
-    // Only show Customize on first page
-    bool showCustomize = (currentId() == Page_NameAndOS);
+    // Show Customize button on all pages except the Summary page
+    bool showCustomize = (currentId() != Page_Summary);
     if (showCustomize) {
         setButtonLayout({BackButton, Stretch, CustomButton1, NextButton, FinishButton, CancelButton});
     } else {
-        setButtonLayout({BackButton, Stretch, NextButton, FinishButton, CancelButton});
+        // On Summary page, show only Back, Finish, Cancel
+        setButtonText(QWizard::BackButton, "< Back");
+        setButtonLayout({BackButton, Stretch, FinishButton, CancelButton});
+
+        // Ensure Finish button triggers validation
+        setOption(QWizard::NoDefaultButton, false);
     }
 }
 
 bool CreateVMWizard::validateCurrentPage()
 {
+    qDebug() << "CreateVMWizard::validateCurrentPage() called, currentId:" << currentId();
+
+    // Call the current page's validatePage() explicitly
+    if (QWizardPage *currentPage = page(currentId())) {
+        qDebug() << "validateCurrentPage: Calling validatePage on page:" << currentPage->metaObject()->className();
+        bool valid = currentPage->validatePage();
+        qDebug() << "validateCurrentPage: validatePage returned:" << valid;
+        return valid;
+    }
+
     // Basic validation - can be extended per page
     return true;
 }
@@ -134,6 +150,11 @@ QString CreateVMWizard::networkSource() const
 bool CreateVMWizard::startAfterInstall() const
 {
     return field("startAfterInstall").toBool();
+}
+
+bool CreateVMWizard::customizeBeforeInstall() const
+{
+    return field("customizeBeforeInstall").toBool();
 }
 
 //=============================================================================
@@ -195,10 +216,8 @@ void NameAndOSPage::setupUI()
     // Load OS types
     loadOSTypes();
 
-    // Connect OS type change to update versions
-    connect(m_osTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            [this]() {
-        // Update versions based on selected OS type
+    // Lambda to update versions based on OS type
+    auto updateVersions = [this]() {
         m_osVersionCombo->clear();
         QString osType = m_osTypeCombo->currentText();
 
@@ -214,9 +233,14 @@ void NameAndOSPage::setupUI()
         } else {
             m_osVersionCombo->addItem("Generic");
         }
-    });
+    };
 
-    // Set defaults
+    // Connect OS type change to update versions
+    connect(m_osTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, updateVersions);
+
+    // Set defaults - populate versions before setting current index
+    updateVersions();
     m_osTypeCombo->setCurrentIndex(0);
     m_nameEdit->setFocus();
 }
@@ -512,13 +536,13 @@ void CPUMemoryPage::setupUI()
     memLayout->addWidget(new QLabel("Memory (MB):"), 0, 0);
 
     m_memorySpin = new QSpinBox();
-    m_memorySpin->setRange(128, 68719476736);
+    m_memorySpin->setRange(128, 65536);  // 128 MB to 64 GB
     m_memorySpin->setValue(1024);
     m_memorySpin->setSingleStep(256);
     memLayout->addWidget(m_memorySpin, 0, 1);
 
     m_maxMemorySpin = new QSpinBox();
-    m_maxMemorySpin->setRange(128, 68719476736);
+    m_maxMemorySpin->setRange(128, 65536);  // 128 MB to 64 GB
     m_maxMemorySpin->setValue(4096);
     m_maxMemorySpin->setSingleStep(256);
     memLayout->addWidget(new QLabel("Max Memory (MB):"), 1, 0);
@@ -903,6 +927,10 @@ void SummaryPage::setupUI()
 
     layout->addWidget(m_summaryLabel);
 
+    m_customizeCheck = new QCheckBox("Customize configuration before install");
+    m_customizeCheck->setChecked(false);
+    layout->addWidget(m_customizeCheck);
+
     m_startCheck = new QCheckBox("Start VM after installation");
     m_startCheck->setChecked(true);
     layout->addWidget(m_startCheck);
@@ -911,10 +939,17 @@ void SummaryPage::setupUI()
 
     // Register field
     registerField("startAfterInstall", m_startCheck);
+    registerField("customizeBeforeInstall", m_customizeCheck);
 }
 
 void SummaryPage::initializePage()
 {
+    updateSummary();
+}
+
+void SummaryPage::showEvent(QShowEvent* event)
+{
+    Q_UNUSED(event);
     updateSummary();
 }
 
@@ -924,20 +959,27 @@ void SummaryPage::updateSummary()
 
     summary += "=== Virtual Machine Configuration ===\n\n";
 
-    summary += "Name: " + m_wizard->vmName() + "\n";
-    summary += "OS Type: " + m_wizard->osType() + "\n\n";
+    // Get values directly from page widgets to ensure we get current values
+    // even if pages haven't been visited yet
+    auto *nameOSPage = static_cast<NameAndOSPage*>(m_wizard->page(CreateVMWizard::Page_NameAndOS));
+    auto *installPage = static_cast<InstallMediaPage*>(m_wizard->page(CreateVMWizard::Page_InstallMedia));
+    auto *cpuMemPage = static_cast<CPUMemoryPage*>(m_wizard->page(CreateVMWizard::Page_CPU_Memory));
+    auto *storagePage = static_cast<StoragePage*>(m_wizard->page(CreateVMWizard::Page_Storage));
+    auto *networkPage = static_cast<NetworkPage*>(m_wizard->page(CreateVMWizard::Page_Network));
+
+    summary += "Name: " + nameOSPage->getVMName() + "\n";
+    summary += "OS Type: " + nameOSPage->getOSType() + "\n";
+    summary += "OS Version: " + nameOSPage->getOSVersion() + "\n\n";
 
     summary += "=== Resources ===\n";
-    summary += "Memory: " + QString::number(m_wizard->memoryMB()) + " MB\n";
-    summary += "CPUs: " + QString::number(m_wizard->vcpus()) + "\n\n";
+    summary += "Memory: " + QString::number(cpuMemPage->getMemoryMB()) + " MB\n";
+    summary += "CPUs: " + QString::number(cpuMemPage->getVCPUs()) + "\n\n";
 
     summary += "=== Storage ===\n";
-    // Get storage info from StoragePage
-    auto *storagePage = static_cast<StoragePage*>(m_wizard->page(CreateVMWizard::Page_Storage));
-    if (storagePage->storageType() != StoragePage::StorageType::NoStorage) {
-        summary += "Path: " + storagePage->diskPath() + "\n";
-        if (storagePage->storageType() == StoragePage::StorageType::NewDisk) {
-            summary += "Size: " + QString::number(storagePage->diskSizeGB()) + " GB\n";
+    if (storagePage->getStorageType() != StoragePage::StorageType::NoStorage) {
+        summary += "Path: " + storagePage->getDiskPath() + "\n";
+        if (storagePage->getStorageType() == StoragePage::StorageType::NewDisk) {
+            summary += "Size: " + QString::number(storagePage->getDiskSizeGB()) + " GB\n";
         }
     } else {
         summary += "No storage configured\n";
@@ -945,12 +987,9 @@ void SummaryPage::updateSummary()
     summary += "\n";
 
     summary += "=== Network ===\n";
-    auto *networkPage = static_cast<NetworkPage*>(m_wizard->page(CreateVMWizard::Page_Network));
-    summary += "Type: " + networkPage->networkType() + "\n";
-    summary += "Source: " + networkPage->networkSource() + "\n\n";
+    summary += "Type: " + networkPage->getNetworkType() + "\n";
+    summary += "Source: " + networkPage->getNetworkSource() + "\n\n";
 
-    // Get install media info
-    auto *installPage = static_cast<InstallMediaPage*>(m_wizard->page(CreateVMWizard::Page_InstallMedia));
     summary += "=== Installation Method ===\n";
     switch (installPage->getInstallType()) {
     case InstallMediaPage::InstallType::LocalISO:
@@ -978,14 +1017,22 @@ void SummaryPage::updateSummary()
 
 bool SummaryPage::validatePage()
 {
+    qDebug() << "SummaryPage::validatePage() called";
+
     // This is where we actually create the VM
     QString vmName = m_wizard->vmName();
+
+    qDebug() << "validatePage: VM name:" << vmName;
+    qDebug() << "validatePage: Showing confirmation dialog";
 
     auto reply = QMessageBox::question(this, "Create Virtual Machine",
         "Are you sure you want to create the virtual machine '" + vmName + "'?",
         QMessageBox::Yes | QMessageBox::No);
 
+    qDebug() << "validatePage: User replied:" << (reply == QMessageBox::Yes ? "Yes" : "No");
+
     if (reply == QMessageBox::Yes) {
+        qDebug() << "validatePage: Creating Guest object";
         // Create Guest object from wizard data
         auto *guest = new Guest(m_connection, this);
 
@@ -1062,6 +1109,22 @@ bool SummaryPage::validatePage()
             guest->addNetworkInterface(nic);
         }
 
+        // Check if user wants to customize before install
+        if (m_wizard->customizeBeforeInstall()) {
+            // Open the customize dialog
+            CustomizeGuestDialog dialog(guest, this);
+
+            // Show dialog as modal - user must accept or cancel
+            if (dialog.exec() == QDialog::Rejected) {
+                // User canceled customization
+                guest->deleteLater();
+                return false;  // Stay on wizard
+            }
+
+            // User accepted - guest has been modified by the dialog
+            // Continue with the modified guest configuration
+        }
+
         // Validate the guest configuration
         if (!guest->validate()) {
             QMessageBox::critical(this, "Invalid Configuration",
@@ -1070,26 +1133,33 @@ bool SummaryPage::validatePage()
             return false;
         }
 
-        // Show the generated XML
+        // Generate the XML
         QString xml = guest->toXML();
 
         // For debugging, show the XML
         qDebug() << "Generated XML:\n" << xml;
 
-        // In a real implementation, we would:
-        // 1. Create storage if needed
-        // 2. Define the VM using virDomainDefineXML()
-        // 3. Start the VM
-        // 4. Open console window
+        // Define the VM in libvirt
+        QString error;
+        qDebug() << "Calling defineDomain for VM:" << guest->name();
+        auto *domain = m_connection->defineDomain(xml, &error);
+        qDebug() << "defineDomain returned:" << (domain ? "success" : "failure");
+        if (!domain) {
+            QMessageBox::critical(this, "Failed to Create VM",
+                "Failed to define the virtual machine:\n" + error);
+            guest->deleteLater();
+            return false;
+        }
 
-        QMessageBox::information(this, "VM Configuration",
-            "VM configuration generated successfully!\n\n"
-            "The following XML will be defined:\n\n" +
-            QString(xml).left(1000) + "...\n\n"
-            "Note: Actual VM creation requires connection to a running libvirtd.\n"
-            "The wizard will complete the VM definition when connected to libvirt.");
+        // VM successfully created
+        QString successMsg = "Virtual machine '%1' has been created successfully.\n\n";
+        successMsg += "You can now start the VM from the manager window.";
 
+        QMessageBox::information(this, "VM Created", successMsg.arg(guest->name()));
+
+        // Clean up the guest object (domain is now owned by the connection)
         guest->deleteLater();
+
         return true; // Allow wizard to finish
     }
 

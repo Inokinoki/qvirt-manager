@@ -64,6 +64,7 @@ public:
     QString networkType() const;
     QString networkSource() const;
     bool startAfterInstall() const;
+    bool customizeBeforeInstall() const;
 
  private slots:
     void onCurrentIdChanged(int id);
@@ -102,6 +103,12 @@ private:
     QComboBox *m_osTypeCombo;
     QComboBox *m_osVersionCombo;
     QLabel *m_osIcon;
+
+public:
+    // Getter methods for SummaryPage
+    QString getVMName() const { return m_nameEdit->text(); }
+    QString getOSType() const { return m_osTypeCombo->currentText(); }
+    QString getOSVersion() const { return m_osVersionCombo->currentText(); }
 };
 
 /**
@@ -177,6 +184,10 @@ public:
     int memoryMB() const { return m_memorySpin->value(); }
     int vcpus() const { return m_vcpuSpin->value(); }
 
+    // Getter methods for SummaryPage
+    int getMemoryMB() const { return m_memorySpin->value(); }
+    int getVCPUs() const { return m_vcpuSpin->value(); }
+
 private:
     void setupUI();
 
@@ -213,6 +224,11 @@ public:
     QString diskPath() const;
     qint64 diskSizeGB() const;
     StorageType storageType() const { return m_storageType; }
+
+    // Getter methods for SummaryPage
+    QString getDiskPath() const { return diskPath(); }
+    qint64 getDiskSizeGB() const { return diskSizeGB(); }
+    StorageType getStorageType() const { return m_storageType; }
 
 private slots:
     void onStorageTypeChanged();
@@ -256,6 +272,10 @@ public:
     QString networkType() const;
     QString networkSource() const;
 
+    // Getter methods for SummaryPage
+    QString getNetworkType() const { return networkType(); }
+    QString getNetworkSource() const { return networkSource(); }
+
 private slots:
     void onNetworkTypeChanged(int index);
 
@@ -282,6 +302,7 @@ public:
     explicit SummaryPage(CreateVMWizard *wizard, Connection *conn);
 
     void initializePage() override;
+    void showEvent(QShowEvent* event) override;
     bool validatePage() override;
     int nextId() const override { return -1; } // Last page
 
@@ -294,6 +315,10 @@ private:
 
     QLabel *m_summaryLabel;
     QCheckBox *m_startCheck;
+    QCheckBox *m_customizeCheck;
+
+public:
+    bool customizeBeforeInstall() const { return m_customizeCheck->isChecked(); }
 };
 
 } // namespace QVirt

@@ -31,6 +31,7 @@ target_link_libraries(qvirt-core
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::UiTools
+        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 if(LIBVIRT_FOUND)
@@ -219,7 +220,9 @@ add_library(qvirt-ui
     ui/models/VMListModel.cpp
     ui/models/VMProxyModel.cpp
     ui/dialogs/ConnectionDialog.cpp
+    ui/dialogs/ConnectionProgressDialog.cpp
     ui/dialogs/AddHardwareDialog.cpp
+    ui/dialogs/CustomizeGuestDialog.cpp
     ui/dialogs/HostDialog.cpp
     ui/dialogs/DeleteDialog.cpp
     ui/dialogs/StoragePoolDialog.cpp

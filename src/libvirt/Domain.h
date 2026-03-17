@@ -150,6 +150,39 @@ public:
     // Raw libvirt pointer (for advanced operations)
     virDomainPtr rawDomain() const { return m_domain; }
 
+    /**
+     * @brief Check if this domain is from cache (offline mode)
+     * @return true if domain was loaded from cache without live libvirt connection
+     */
+    bool isCached() const { return m_domain == nullptr; }
+
+    /**
+     * @brief Cached VM information for local storage
+     */
+    struct CacheInfo
+    {
+        QString name;
+        QString uuid;
+        int state = 0;  // Domain::State enum value
+        QString description;
+        QString title;
+        quint64 memory = 0;  // in KB (max memory)
+        quint64 currentMemory = 0;  // in KB (current memory)
+        int vcpuCount = 0;
+        int maxVcpuCount = 0;
+        QString xmlDesc;  // Full XML configuration
+        qint64 lastUpdated = 0;  // Unix timestamp
+
+        CacheInfo() = default;
+
+        explicit CacheInfo(const QString &name, const QString &uuid)
+            : name(name), uuid(uuid) {}
+    };
+
+    // Serialization for caching
+    CacheInfo toCacheInfo() const;
+    static Domain *fromCacheInfo(Connection *conn, const CacheInfo &info);
+
 signals:
     void stateChanged(State newState);
     void configChanged();
@@ -170,11 +203,16 @@ private:
     QString m_description;
     QString m_title;
 
+    // Cached XML for offline mode
+    QString m_cachedXmlDesc;
+
     // Cached values
     quint64 m_maxMemory;
+    quint64 m_currentMemory;
     int m_vcpuCount;
+    int m_maxVcpuCount;
     quint64 m_cpuTime;
-    
+
     // CPU usage calculation
     quint64 m_prevCpuTime;
     qint64 m_prevCpuTimestamp;

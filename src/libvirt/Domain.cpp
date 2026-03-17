@@ -26,36 +26,44 @@ Domain::Domain(Connection *conn, virDomainPtr domain)
     , m_domain(domain)
     , m_state(StateNoState)
     , m_maxMemory(0)
+    , m_currentMemory(0)
     , m_vcpuCount(0)
+    , m_maxVcpuCount(0)
     , m_cpuTime(0)
     , m_prevCpuTime(0)
     , m_prevCpuTimestamp(0)
     , m_cachedCpuUsage(0.0f)
 {
-    // Get domain name
-    const char *name = virDomainGetName(m_domain);
-    if (name) {
-        m_name = QString::fromUtf8(name);
+    // Only call libvirt functions if we have a valid virDomainPtr
+    // For cached domains (m_domain == nullptr), values will be set by fromCacheInfo()
+    if (m_domain) {
+        // Get domain name
+        const char *name = virDomainGetName(m_domain);
+        if (name) {
+            m_name = QString::fromUtf8(name);
+        }
+
+        // Get domain UUID
+        char uuid[VIR_UUID_STRING_BUFLEN];
+        if (virDomainGetUUIDString(m_domain, uuid) == 0) {
+            m_uuid = QString::fromUtf8(uuid);
+        }
+
+        // Get domain ID
+        int id = virDomainGetID(m_domain);
+        if (id >= 0) {
+            m_id = QString::number(id);
+        } else {
+            m_id = "-";
+        }
+
+        // Initialize with current info
+        updateInfo();
+
+        qDebug() << "Created Domain wrapper for" << m_name << "(" << m_uuid << ")";
     }
-
-    // Get domain UUID
-    char uuid[VIR_UUID_STRING_BUFLEN];
-    if (virDomainGetUUIDString(m_domain, uuid) == 0) {
-        m_uuid = QString::fromUtf8(uuid);
-    }
-
-    // Get domain ID
-    int id = virDomainGetID(m_domain);
-    if (id >= 0) {
-        m_id = QString::number(id);
-    } else {
-        m_id = "-";
-    }
-
-    // Initialize with current info
-    updateInfo();
-
-    qDebug() << "Created Domain wrapper for" << m_name << "(" << m_uuid << ")";
+    // For cached domains (m_domain == nullptr), no libvirt calls are made
+    // The caller (fromCacheInfo) will set the member variables directly
 }
 
 Domain::~Domain()
@@ -78,6 +86,8 @@ void Domain::updateInfo()
     if (ret < 0) {
         qWarning() << "Failed to get domain info for" << m_name << "- domain may be inaccessible";
         // Don't return early - keep the domain but mark as inaccessible
+        // However, we should still try to get the state from the domain directly
+        // For a newly defined (shut off) VM, virDomainGetInfo may fail but the domain is still valid
         return;
     }
 
@@ -89,8 +99,17 @@ void Domain::updateInfo()
 
     // Update cached values
     m_maxMemory = info.maxMem;
+    m_currentMemory = info.memory;
     m_vcpuCount = info.nrVirtCpu;
     m_cpuTime = info.cpuTime;
+
+    // Get max vcpu count
+    int maxVcpu = virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
+    if (maxVcpu > 0) {
+        m_maxVcpuCount = maxVcpu;
+    } else {
+        m_maxVcpuCount = m_vcpuCount;  // Fallback to current count
+    }
 
     // Get XML description for additional info
     char *xml = virDomainGetXMLDesc(m_domain, 0);
@@ -230,8 +249,9 @@ bool Domain::save(const QString &path)
 
 QString Domain::getXMLDesc(unsigned int flags) const
 {
+    // For cached domains (offline mode), return the cached XML
     if (!m_domain) {
-        return QString();
+        return m_cachedXmlDesc;
     }
 
     char *xml = virDomainGetXMLDesc(m_domain, flags);
@@ -347,10 +367,11 @@ int Domain::vcpuCount() const
 int Domain::maxVcpuCount() const
 {
     if (!m_domain) {
-        return 0;
+        return m_maxVcpuCount;
     }
 
-    return virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
+    int maxVcpu = virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
+    return maxVcpu > 0 ? maxVcpu : m_vcpuCount;
 }
 
 quint64 Domain::cpuTime() const
@@ -415,12 +436,12 @@ float Domain::cpuUsage()
 quint64 Domain::currentMemory() const
 {
     if (!m_domain) {
-        return 0;
+        return m_currentMemory;
     }
 
     virDomainInfo info;
     if (virDomainGetInfo(m_domain, &info) < 0) {
-        return 0;
+        return m_currentMemory;
     }
 
     return info.memory;
@@ -726,6 +747,113 @@ bool Domain::guestAgentShutdown(int timeout)
     Q_UNUSED(timeout);
     return false;
 #endif
+}
+
+// Serialization for caching
+Domain::CacheInfo Domain::toCacheInfo() const
+{
+    CacheInfo info;
+    info.name = m_name;
+    info.uuid = m_uuid;
+    info.state = static_cast<int>(m_state);
+    info.description = m_description;
+    info.title = m_title;
+    info.memory = m_maxMemory;
+    info.currentMemory = m_currentMemory;
+    info.vcpuCount = m_vcpuCount;
+    info.maxVcpuCount = m_maxVcpuCount;
+    // Use cached XML if available (for cached domains), otherwise fetch from libvirt
+    info.xmlDesc = m_cachedXmlDesc.isEmpty() ? getXMLDesc() : m_cachedXmlDesc;
+    info.lastUpdated = QDateTime::currentMSecsSinceEpoch();
+    return info;
+}
+
+Domain *Domain::fromCacheInfo(Connection *conn, const CacheInfo &info)
+{
+    // Create a minimal Domain object from cached info
+    // Note: This domain won't have a valid virDomainPtr, so operations requiring
+    // libvirt will fail. It's meant for display purposes until the connection
+    // is refreshed and the domain is reloaded from libvirt.
+    // State is set to StateNoState to indicate the VM is not actively running
+    // (the actual state is unknown without a live connection)
+    auto *domain = new Domain(conn, nullptr);
+    domain->m_name = info.name;
+    domain->m_uuid = info.uuid;
+    domain->m_state = State::StateNoState;  // Always use StateNoState for cached VMs
+    domain->m_description = info.description;
+    domain->m_title = info.title;
+    domain->m_maxMemory = info.memory;
+    domain->m_currentMemory = info.currentMemory;
+    domain->m_vcpuCount = info.vcpuCount;
+    domain->m_maxVcpuCount = info.maxVcpuCount;
+    domain->m_cachedXmlDesc = info.xmlDesc;  // Store cached XML for device display
+
+    // Parse values from XML to fill in missing cache data
+    if (!info.xmlDesc.isEmpty()) {
+        QDomDocument doc;
+        if (doc.setContent(info.xmlDesc)) {
+            QDomElement root = doc.documentElement();
+            if (root.tagName() == "domain") {
+                // Parse memory from <memory> element (in KB)
+                QDomNodeList memoryNodes = root.elementsByTagName("memory");
+                if (!memoryNodes.isEmpty() && domain->m_maxMemory == 0) {
+                    QDomElement memElem = memoryNodes.at(0).toElement();
+                    QString unit = memElem.attribute("unit", "KiB");
+                    quint64 memValue = memElem.text().toULongLong();
+                    // Convert to KB if needed
+                    if (unit == "KiB" || unit == "K") {
+                        domain->m_maxMemory = memValue;
+                    } else if (unit == "MiB" || unit == "M") {
+                        domain->m_maxMemory = memValue * 1024;
+                    } else if (unit == "GiB" || unit == "G") {
+                        domain->m_maxMemory = memValue * 1024 * 1024;
+                    } else if (unit == "bytes" || unit == "B") {
+                        domain->m_maxMemory = memValue / 1024;
+                    }
+                }
+
+                // Parse currentMemory from <currentMemory> element (in KB)
+                QDomNodeList currentMemoryNodes = root.elementsByTagName("currentMemory");
+                if (!currentMemoryNodes.isEmpty() && domain->m_currentMemory == 0) {
+                    QDomElement curMemElem = currentMemoryNodes.at(0).toElement();
+                    QString unit = curMemElem.attribute("unit", "KiB");
+                    quint64 memValue = curMemElem.text().toULongLong();
+                    // Convert to KB if needed
+                    if (unit == "KiB" || unit == "K") {
+                        domain->m_currentMemory = memValue;
+                    } else if (unit == "MiB" || unit == "M") {
+                        domain->m_currentMemory = memValue * 1024;
+                    } else if (unit == "GiB" || unit == "G") {
+                        domain->m_currentMemory = memValue * 1024 * 1024;
+                    } else if (unit == "bytes" || unit == "B") {
+                        domain->m_currentMemory = memValue / 1024;
+                    }
+                }
+
+                // Parse vcpu from <vcpu> element
+                QDomNodeList vcpuNodes = root.elementsByTagName("vcpu");
+                if (!vcpuNodes.isEmpty()) {
+                    QDomElement vcpuElem = vcpuNodes.at(0).toElement();
+                    // Parse current vcpu count
+                    if (domain->m_vcpuCount == 0 && !vcpuElem.text().isEmpty()) {
+                        domain->m_vcpuCount = vcpuElem.text().toInt();
+                    }
+                    // Parse max vcpu from 'max' attribute
+                    if (domain->m_maxVcpuCount == 0) {
+                        QString maxAttr = vcpuElem.attribute("max");
+                        if (!maxAttr.isEmpty()) {
+                            domain->m_maxVcpuCount = maxAttr.toInt();
+                        } else {
+                            // Use current value as fallback
+                            domain->m_maxVcpuCount = domain->m_vcpuCount;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return domain;
 }
 
 } // namespace QVirt

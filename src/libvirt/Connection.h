@@ -77,6 +77,13 @@ public:
     static Connection *create(const QString &uri);
 
     /**
+     * @brief Create a connection object in Disconnected state without attempting to connect
+     * @param uri Connection URI
+     * @return Connection object in Disconnected state (no network activity)
+     */
+    static Connection *createDisconnected(const QString &uri);
+
+    /**
      * @brief Open a new libvirt connection asynchronously (non-blocking)
      * @param sshKeyPath Optional path to SSH private key
      * @param password Optional password for authentication
@@ -103,6 +110,9 @@ public:
     Domain *getDomain(const QString &name);
     Domain *getDomainByUUID(const QString &uuid);
 
+    // Domain creation
+    Domain *defineDomain(const QString &xml, QString *errorOutput = nullptr);
+
     QList<Network *> networks() const;
     Network *getNetwork(const QString &name);
 
@@ -125,13 +135,20 @@ public:
     // Polling control
     bool isPollingEnabled() const { return m_pollingEnabled; }
     void setPollingEnabled(bool enabled) { m_pollingEnabled = enabled; }
+    void disableInitialPoll() { m_initialPoll = false; }
 
     // SSH credentials (stored for persistence)
     QString sshKeyPath() const { return m_sshKeyPath; }
     QString sshUsername() const { return m_sshUsername; }
 
+    // VM Cache management
+    void saveVMCache() const;
+    void loadVMCache();
+    void clearVMCache() const;
+
 signals:
     void stateChanged(State newState);
+    void connectionProgress(const QString &status);
     void domainAdded(Domain *domain);
     void domainRemoved(Domain *domain);
     void networkAdded(Network *network);
@@ -148,6 +165,7 @@ signals:
  private:
     Connection(const QString &uri);
     Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
+    Connection(const QString &uri, bool /* internal */);  // Internal constructor, no connection attempt
     void initAllResources();
     void pollDomains();
     void pollNetworks();

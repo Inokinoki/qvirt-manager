@@ -14,6 +14,7 @@
 #include "../dialogs/StoragePoolDialog.h"
 #include "../dialogs/NetworkDialog.h"
 #include "../dialogs/PreferencesDialog.h"
+#include "../dialogs/ConnectionProgressDialog.h"
 #include "../widgets/ContextMenu.h"
 #include "../widgets/GraphWidget.h"
 #include "../vmwindow/VMWindow.h"
@@ -55,9 +56,11 @@ ManagerWindow::ManagerWindow(QWidget *parent)
     // Load all saved connections (even disconnected ones)
     Config *config = Config::instance();
     QStringList uris = config->connectionURIs();
+
     for (const QString &uri : uris) {
         // Add to model as disconnected first
         bool autoconnect = config->connAutoconnect(uri);
+
         m_treeModel->addDisconnectedConnection(uri, autoconnect);
 
         // Try to auto-connect if configured
@@ -69,10 +72,35 @@ ManagerWindow::ManagerWindow(QWidget *parent)
             // Note: We don't save passwords for security (user would need to re-enter)
             // In production, use QtKeychain or similar for secure password storage
             Connection *conn = Connection::open(uri, sshKeyPath, QString());
+
             if (conn) {
                 addConnection(conn);
+            } else {
+                // Connection failed - create a failed connection object to show cached VMs
+                conn = Connection::create(uri);
+                conn->loadVMCache();
+                m_treeModel->addConnection(conn);
+
+                // Auto-expand the connection to show cached VMs
+                QModelIndex connIndex = m_treeModel->connectionIndex(conn);
+                if (connIndex.isValid()) {
+                    m_treeView->expand(connIndex);
+                }
             }
-            // If connection fails, it remains in the list as disconnected (shown in gray)
+        } else {
+            // Autoconnect is disabled - add as disconnected entry with cached VMs
+            // User can manually connect later if desired
+            Connection *conn = Connection::createDisconnected(uri);
+            conn->loadVMCache();
+
+            // Add to model - this will show as disconnected with cached VMs
+            m_treeModel->addConnection(conn);
+
+            // Auto-expand the connection to show cached VMs
+            QModelIndex connIndex = m_treeModel->connectionIndex(conn);
+            if (connIndex.isValid()) {
+                m_treeView->expand(connIndex);
+            }
         }
     }
 
@@ -330,6 +358,10 @@ void ManagerWindow::addConnection(Connection *conn)
         return;
     }
 
+    // Disable initial poll since we call refresh() directly in the model
+    // This prevents tick() from calling initAllResources() concurrently
+    conn->disableInitialPoll();
+
     // Register connection with Engine so it gets tick() calls
     Engine::instance()->registerConnection(conn);
 
@@ -444,6 +476,8 @@ void ManagerWindow::onVMResume()
 
 void ManagerWindow::onNewVM()
 {
+    qDebug() << "onNewVM: Starting VM creation wizard";
+
     // Get the selected connection
     Connection *conn = getCurrentConnection();
     if (!conn) {
@@ -453,7 +487,7 @@ void ManagerWindow::onNewVM()
             m_treeView->setCurrentIndex(firstIndex);
             conn = getCurrentConnection();
         }
-        
+
         if (!conn) {
             QMessageBox::warning(this, tr("No Connection Available"),
                 tr("Please add a connection first."));
@@ -464,7 +498,7 @@ void ManagerWindow::onNewVM()
     if (!conn) {
         QMessageBox::warning(this, tr("Connection Error"),
             tr("Failed to get connection."));
-        return;
+            return;
     }
 
     // Check if connection is active
@@ -474,21 +508,28 @@ void ManagerWindow::onNewVM()
         return;
     }
 
+    qDebug() << "onNewVM: Opening wizard for connection:" << conn->uri();
+
     // Open the create VM wizard
     auto *wizard = new CreateVMWizard(conn, this);
     wizard->setAttribute(Qt::WA_DeleteOnClose);
 
-    connect(wizard, &QWizard::accepted, this, [this]() {
+    connect(wizard, &QWizard::accepted, this, [this, conn]() {
+        qDebug() << "onNewVM: Wizard accepted, refreshing tree model";
         m_statusLabel->setText(tr("VM created successfully"));
         m_treeModel->refresh();
+        qDebug() << "onNewVM: Tree model refreshed, domain count:" << conn->domains().count();
     });
 
     int result = wizard->exec();  // Use exec() for modal dialog
-    
+
+    qDebug() << "onNewVM: Wizard exec() returned:" << result;
+
     // Re-enable polling after dialog closes (if it was disabled)
     conn->setPollingEnabled(true);
-    
+
     if (result == QDialog::Accepted) {
+        qDebug() << "onNewVM: Result was Accepted, calling refresh again";
         m_treeModel->refresh();
     }
 }
@@ -641,16 +682,18 @@ void ManagerWindow::updateVMControls()
     Domain *domain = getCurrentDomain();
 
     bool hasSelection = (domain != nullptr);
+    bool isCached = domain && domain->isCached();
     Domain::State state = domain ? domain->state() : Domain::StateNoState;
 
     // Calculate enabled states for toolbar actions
-    bool canStart = hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState);
-    bool canStop = hasSelection && (state == Domain::StateRunning || state == Domain::StateBlocked);
-    bool canReboot = hasSelection && (state == Domain::StateRunning);
-    bool canPause = hasSelection && (state == Domain::StateRunning);
-    bool canResume = hasSelection && (state == Domain::StatePaused);
-    bool canDelete = hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
-    bool canOpenConsole = hasSelection;
+    // Disable all actions for cached VMs (no live connection)
+    bool canStart = !isCached && hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState);
+    bool canStop = !isCached && hasSelection && (state == Domain::StateRunning || state == Domain::StateBlocked);
+    bool canReboot = !isCached && hasSelection && (state == Domain::StateRunning);
+    bool canPause = !isCached && hasSelection && (state == Domain::StateRunning);
+    bool canResume = !isCached && hasSelection && (state == Domain::StatePaused);
+    bool canDelete = !isCached && hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
+    bool canOpenConsole = !isCached && hasSelection;
 
     // Update toolbar actions
     if (m_actionStart) m_actionStart->setEnabled(canStart);
@@ -813,13 +856,18 @@ void ManagerWindow::onConnectToConnection()
     QString sshKeyPath = config->connSSHKeyPath(uri);
     QString sshUsername = config->connSSHUsername(uri);
 
+    // Create and show progress dialog
+    m_progressDialog = new ConnectionProgressDialog(this);
+    m_progressDialog->show();
+
     // Create connection and connect asynchronously
     auto *newConn = Connection::create(uri);
     connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
-    
+    connect(newConn, &Connection::connectionProgress, m_progressDialog, &ConnectionProgressDialog::updateStatus);
+
     // Start async connection
     newConn->openAsync(sshKeyPath, QString());
-    
+
     // Temporarily store the connection until connection completes
     m_connectingConnections[uri] = newConn;
 }
@@ -988,16 +1036,34 @@ void ManagerWindow::onConnectionStateChanged(Connection::State state)
         // Connection succeeded
         addConnection(conn);
         m_connectingConnections.remove(uri);
-        
+
+        // Close progress dialog
+        if (m_progressDialog) {
+            m_progressDialog->close();
+            m_progressDialog->deleteLater();
+            m_progressDialog = nullptr;
+        }
+
         m_statusLabel->setText(tr("Connected to: %1").arg(uri));
     } else if (state == Connection::ConnectionFailed) {
-        // Connection failed
-        // Remove the failed connection
-        conn->deleteLater();
+        // Connection failed - keep connection and show cached VMs
         m_connectingConnections.remove(uri);
-        
+
+        // Close progress dialog
+        if (m_progressDialog) {
+            m_progressDialog->close();
+            m_progressDialog->deleteLater();
+            m_progressDialog = nullptr;
+        }
+
+        // Load cached VMs for offline display
+        conn->loadVMCache();
+
+        // Add connection to tree (will show as disconnected with cached VMs)
+        m_treeModel->addConnection(conn);
+
         QMessageBox::warning(this, tr("Connection Failed"),
-            tr("Failed to connect to: %1\n\n%2").arg(uri, conn->connectionError()));
+            tr("Failed to connect to: %1\n\n%2\n\nShowing cached VMs.").arg(uri, conn->connectionError()));
     } else if (state == Connection::Connecting) {
         // Still connecting - update status
         m_statusLabel->setText(tr("Connecting to %1...").arg(uri));

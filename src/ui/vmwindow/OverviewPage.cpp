@@ -20,6 +20,15 @@ OverviewPage::OverviewPage(Domain *domain, QWidget *parent)
 {
     setupUI();
     updateInfo();
+
+    // For cached VMs (offline mode), hide performance graphs
+    if (m_domain->isCached()) {
+        m_graphsGroup->setVisible(false);
+        m_performanceGroup->setVisible(false);
+        if (m_graphUpdateTimer) {
+            m_graphUpdateTimer->stop();
+        }
+    }
 }
 
 void OverviewPage::setupUI()
@@ -169,7 +178,14 @@ void OverviewPage::updateInfo()
     // Update VM info
     m_nameValue->setText(m_domain->name());
     m_uuidValue->setText(m_domain->uuid());
-    m_stateValue->setText(EnumMapper::stateToString(m_domain->state()));
+
+    // For cached VMs, show "Cached (Offline)" state
+    // Note: isCached() checks if the domain has no valid virDomainPtr
+    if (m_domain->isCached()) {
+        m_stateValue->setText("Cached (Offline)");
+    } else {
+        m_stateValue->setText(EnumMapper::stateToString(m_domain->state()));
+    }
 
     QString title = m_domain->title();
     m_titleValue->setText(title.isEmpty() ? "-" : title);
@@ -190,7 +206,10 @@ void OverviewPage::updateInfo()
     quint64 maxMemKB = m_domain->maxMemory();
     m_maxMemoryValue->setText(QString("%1 MB").arg(maxMemKB / 1024));
 
-    updateStats();
+    // Only update stats for non-cached VMs
+    if (!m_domain->isCached()) {
+        updateStats();
+    }
 }
 
 void OverviewPage::updateStats()
@@ -221,6 +240,11 @@ void OverviewPage::updateStats()
 
 void OverviewPage::refreshPerformanceGraphs()
 {
+    // Skip graph updates for cached VMs
+    if (m_domain->isCached()) {
+        return;
+    }
+
     // Update CPU graph with current usage
     float cpuPercent = m_domain->cpuUsage();
     m_cpuGraph->addValue(cpuPercent);

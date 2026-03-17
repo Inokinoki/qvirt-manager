@@ -274,7 +274,9 @@ void Config::saveVMCache(const QString &uri, const QString &uuid, const VMCacheI
     addTextElement("description", info.description);
     addTextElement("title", info.title);
     addTextElement("memory", QString::number(info.memory));
+    addTextElement("currentMemory", QString::number(info.currentMemory));
     addTextElement("vcpuCount", QString::number(info.vcpuCount));
+    addTextElement("maxVcpuCount", QString::number(info.maxVcpuCount));
     addTextElement("lastUpdated", QString::number(info.lastUpdated));
 
     // Add the full libvirt XML description as a CDATA section to preserve formatting
@@ -320,7 +322,9 @@ VMCacheInfo Config::loadVMCache(const QString &uri, const QString &uuid) const
             info.description = getElementText("description");
             info.title = getElementText("title");
             info.memory = getElementText("memory").toULongLong();
+            info.currentMemory = getElementText("currentMemory").toULongLong();
             info.vcpuCount = getElementText("vcpuCount").toInt();
+            info.maxVcpuCount = getElementText("maxVcpuCount").toInt();
             info.lastUpdated = getElementText("lastUpdated").toLongLong();
 
             // Get XML description from CDATA section

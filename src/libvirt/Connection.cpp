@@ -1373,7 +1373,9 @@ void Connection::saveVMCache() const
             info.description = domainInfo.description;
             info.title = domainInfo.title;
             info.memory = domainInfo.memory;
+            info.currentMemory = domainInfo.currentMemory;
             info.vcpuCount = domainInfo.vcpuCount;
+            info.maxVcpuCount = domainInfo.maxVcpuCount;
             info.xmlDesc = domainInfo.xmlDesc;
             info.lastUpdated = domainInfo.lastUpdated;
             config->saveVMCache(m_uri, domain->uuid(), info);

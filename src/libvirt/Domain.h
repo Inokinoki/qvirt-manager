@@ -166,8 +166,10 @@ public:
         int state = 0;  // Domain::State enum value
         QString description;
         QString title;
-        quint64 memory = 0;  // in KB
+        quint64 memory = 0;  // in KB (max memory)
+        quint64 currentMemory = 0;  // in KB (current memory)
         int vcpuCount = 0;
+        int maxVcpuCount = 0;
         QString xmlDesc;  // Full XML configuration
         qint64 lastUpdated = 0;  // Unix timestamp
 
@@ -201,9 +203,14 @@ private:
     QString m_description;
     QString m_title;
 
+    // Cached XML for offline mode
+    QString m_cachedXmlDesc;
+
     // Cached values
     quint64 m_maxMemory;
+    quint64 m_currentMemory;
     int m_vcpuCount;
+    int m_maxVcpuCount;
     quint64 m_cpuTime;
 
     // CPU usage calculation

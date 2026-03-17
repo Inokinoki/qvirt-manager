@@ -53,8 +53,10 @@ struct VMCacheInfo
     int state = 0;  // QVirt::Domain::State enum value
     QString description;
     QString title;
-    quint64 memory = 0;  // in KB
+    quint64 memory = 0;  // in KB (max memory)
+    quint64 currentMemory = 0;  // in KB (current memory)
     int vcpuCount = 0;
+    int maxVcpuCount = 0;  // max vcpu count
     QString xmlDesc;  // Full XML configuration
     qint64 lastUpdated = 0;  // Unix timestamp
 

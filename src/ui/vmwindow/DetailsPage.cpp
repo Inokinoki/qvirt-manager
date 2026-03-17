@@ -140,8 +140,9 @@ void DetailsPage::populateDeviceTree()
     // Parse domain XML once and reuse for all sections
     QString xml = m_domain->getXMLDesc();
     QDomDocument doc;
-    QDomDocument::ParseResult result = doc.setContent(xml);
-    bool xmlValid = result.errorMessage.isEmpty();
+    QString errorMsg;
+    int errorLine = 0, errorColumn = 0;
+    bool xmlValid = doc.setContent(xml, &errorMsg, &errorLine, &errorColumn);
 
     // Overview item (basic VM info)
     auto *overviewItem = addDeviceCategory("Overview", QString());

@@ -346,10 +346,18 @@ QList<VMCacheInfo> Config::loadAllVMCache(const QString &uri) const
     QList<VMCacheInfo> vmList;
     QDir cacheDir = getVMCacheDir(uri);
 
+    qDebug() << "=== loadAllVMCache ===";
+    qDebug() << "URI:" << uri;
+    qDebug() << "Cache directory:" << cacheDir.path();
+
     // Read index file
     QString indexPath = cacheDir.filePath("index.xml");
     QFile indexFile(indexPath);
+    qDebug() << "Index file path:" << indexPath;
+    qDebug() << "Index file exists:" << (indexFile.exists() ? "YES" : "NO");
+
     if (!indexFile.exists()) {
+        qDebug() << "Index file does NOT exist!";
         return vmList;
     }
 
@@ -358,17 +366,24 @@ QList<VMCacheInfo> Config::loadAllVMCache(const QString &uri) const
         if (doc.setContent(&indexFile)) {
             QDomElement root = doc.documentElement();
             QDomNodeList uuidNodes = root.elementsByTagName("uuid");
+            qDebug() << "Found" << uuidNodes.count() << "UUIDs in index file";
+
             for (int i = 0; i < uuidNodes.count(); i++) {
                 QString uuid = uuidNodes.at(i).toElement().text();
+                qDebug() << "  Loading VM with UUID:" << uuid;
                 VMCacheInfo info = loadVMCache(uri, uuid);
                 if (!info.name.isEmpty()) {
+                    qDebug() << "    Loaded VM:" << info.name;
                     vmList.append(info);
+                } else {
+                    qDebug() << "    FAILED to load VM (empty name)";
                 }
             }
         }
         indexFile.close();
     }
 
+    qDebug() << "Total VMs loaded:" << vmList.count();
     return vmList;
 }
 

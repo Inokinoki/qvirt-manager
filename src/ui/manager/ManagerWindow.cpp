@@ -56,9 +56,11 @@ ManagerWindow::ManagerWindow(QWidget *parent)
     // Load all saved connections (even disconnected ones)
     Config *config = Config::instance();
     QStringList uris = config->connectionURIs();
+
     for (const QString &uri : uris) {
         // Add to model as disconnected first
         bool autoconnect = config->connAutoconnect(uri);
+
         m_treeModel->addDisconnectedConnection(uri, autoconnect);
 
         // Try to auto-connect if configured
@@ -70,29 +72,34 @@ ManagerWindow::ManagerWindow(QWidget *parent)
             // Note: We don't save passwords for security (user would need to re-enter)
             // In production, use QtKeychain or similar for secure password storage
             Connection *conn = Connection::open(uri, sshKeyPath, QString());
+
             if (conn) {
                 addConnection(conn);
             } else {
                 // Connection failed - create a failed connection object to show cached VMs
-                qDebug() << "Connection failed for" << uri << "- loading cached VMs";
                 conn = Connection::create(uri);
-                qDebug() << "Connection created, state:" << conn->state() << "domains before load:" << conn->domains().count();
                 conn->loadVMCache();
-                qDebug() << "Cache loaded, domains after load:" << conn->domains().count();
-                for (Domain *d : conn->domains()) {
-                    qDebug() << "  - Cached VM:" << d->name() << "UUID:" << d->uuid() << "state:" << d->state();
-                }
                 m_treeModel->addConnection(conn);
-                qDebug() << "Connection added to tree model";
 
                 // Auto-expand the connection to show cached VMs
                 QModelIndex connIndex = m_treeModel->connectionIndex(conn);
                 if (connIndex.isValid()) {
-                    qDebug() << "Expanding connection index, valid:" << connIndex.isValid();
                     m_treeView->expand(connIndex);
-                } else {
-                    qDebug() << "Connection index is NOT valid, cannot expand";
                 }
+            }
+        } else {
+            // Autoconnect is disabled - add as disconnected entry with cached VMs
+            // User can manually connect later if desired
+            Connection *conn = Connection::createDisconnected(uri);
+            conn->loadVMCache();
+
+            // Add to model - this will show as disconnected with cached VMs
+            m_treeModel->addConnection(conn);
+
+            // Auto-expand the connection to show cached VMs
+            QModelIndex connIndex = m_treeModel->connectionIndex(conn);
+            if (connIndex.isValid()) {
+                m_treeView->expand(connIndex);
             }
         }
     }
@@ -350,6 +357,10 @@ void ManagerWindow::addConnection(Connection *conn)
     if (!conn) {
         return;
     }
+
+    // Disable initial poll since we call refresh() directly in the model
+    // This prevents tick() from calling initAllResources() concurrently
+    conn->disableInitialPoll();
 
     // Register connection with Engine so it gets tick() calls
     Engine::instance()->registerConnection(conn);

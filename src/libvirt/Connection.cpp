@@ -217,6 +217,27 @@ Connection *Connection::create(const QString &uri)
     return new Connection(uri);
 }
 
+Connection *Connection::createDisconnected(const QString &uri)
+{
+    return new Connection(uri, true);  // Internal constructor, no connection attempt
+}
+
+// Internal constructor - creates Connection object without attempting to connect
+Connection::Connection(const QString &uri, bool /* internal */)
+    : BaseObject()
+    , m_uri(uri)
+    , m_state(Disconnected)
+    , m_conn(nullptr)
+    , m_tickCounter(0)
+    , m_initialPoll(true)
+    , m_pollingEnabled(true)
+    , m_lastCPUTime(0)
+    , m_lastIdleTime(0)
+    , m_lastCPUUsage(0)
+{
+    // Do not attempt to open connection - used for cached VM display only
+}
+
 void Connection::openAsync(const QString &sshKeyPath, const QString &password)
 {
     m_state = Connecting;
@@ -1363,13 +1384,22 @@ void Connection::saveVMCache() const
 
 void Connection::loadVMCache()
 {
+    qWarning() << "=== loadVMCache START ===";
+    qWarning() << "Connection URI:" << m_uri;
+
     auto *config = Config::instance();
     QList<VMCacheInfo> cachedVMs = config->loadAllVMCache(m_uri);
 
-    qDebug() << "Loading" << cachedVMs.size() << "VMs from cache for connection:" << m_uri;
-    qDebug() << "Connection m_domains count before load:" << m_domains.count();
+    qWarning() << "Loading" << cachedVMs.size() << "VMs from cache for connection:" << m_uri;
+    qWarning() << "Connection m_domains count before load:" << m_domains.count();
+
+    if (cachedVMs.isEmpty()) {
+        qWarning() << "WARNING: No cached VMs found for URI:" << m_uri;
+    }
 
     for (const VMCacheInfo &cacheInfo : cachedVMs) {
+        qWarning() << "Processing cached VM:" << cacheInfo.name << "(" << cacheInfo.uuid << ")";
+
         // Check if domain already exists in cache (by UUID)
         bool found = false;
         for (auto *domain : m_domains) {
@@ -1380,13 +1410,13 @@ void Connection::loadVMCache()
         }
 
         if (found) {
-            qDebug() << "Skipping cached VM" << cacheInfo.name << "- already have live data";
+            qWarning() << "Skipping cached VM" << cacheInfo.name << "- already have live data";
             continue;
         }
 
         // Check if domain exists by name
         if (m_domains.contains(cacheInfo.name)) {
-            qDebug() << "Skipping cached VM" << cacheInfo.name << "- already in cache by name";
+            qWarning() << "Skipping cached VM" << cacheInfo.name << "- already in cache by name";
             continue;
         }
 
@@ -1406,11 +1436,14 @@ void Connection::loadVMCache()
         Domain *domain = Domain::fromCacheInfo(this, domainCacheInfo);
         if (domain) {
             m_domains[cacheInfo.name] = domain;
-            qDebug() << "Loaded VM from cache:" << cacheInfo.name << "(" << cacheInfo.uuid << ")";
+            qWarning() << "Loaded VM from cache:" << cacheInfo.name << "(" << cacheInfo.uuid << ")";
             emit domainAdded(domain);
+        } else {
+            qWarning() << "FAILED to create domain from cache:" << cacheInfo.name;
         }
     }
-    qDebug() << "Connection m_domains count after load:" << m_domains.count();
+    qWarning() << "Connection m_domains count after load:" << m_domains.count();
+    qWarning() << "=== loadVMCache END ===";
 }
 
 void Connection::clearVMCache() const

@@ -31,6 +31,7 @@ target_link_libraries(qvirt-core
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Widgets
         Qt${QT_VERSION_MAJOR}::UiTools
+        Qt${QT_VERSION_MAJOR}::Xml
 )
 
 if(LIBVIRT_FOUND)

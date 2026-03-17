@@ -72,8 +72,28 @@ ManagerWindow::ManagerWindow(QWidget *parent)
             Connection *conn = Connection::open(uri, sshKeyPath, QString());
             if (conn) {
                 addConnection(conn);
+            } else {
+                // Connection failed - create a failed connection object to show cached VMs
+                qDebug() << "Connection failed for" << uri << "- loading cached VMs";
+                conn = Connection::create(uri);
+                qDebug() << "Connection created, state:" << conn->state() << "domains before load:" << conn->domains().count();
+                conn->loadVMCache();
+                qDebug() << "Cache loaded, domains after load:" << conn->domains().count();
+                for (Domain *d : conn->domains()) {
+                    qDebug() << "  - Cached VM:" << d->name() << "UUID:" << d->uuid() << "state:" << d->state();
+                }
+                m_treeModel->addConnection(conn);
+                qDebug() << "Connection added to tree model";
+
+                // Auto-expand the connection to show cached VMs
+                QModelIndex connIndex = m_treeModel->connectionIndex(conn);
+                if (connIndex.isValid()) {
+                    qDebug() << "Expanding connection index, valid:" << connIndex.isValid();
+                    m_treeView->expand(connIndex);
+                } else {
+                    qDebug() << "Connection index is NOT valid, cannot expand";
+                }
             }
-            // If connection fails, it remains in the list as disconnected (shown in gray)
         }
     }
 
@@ -651,16 +671,18 @@ void ManagerWindow::updateVMControls()
     Domain *domain = getCurrentDomain();
 
     bool hasSelection = (domain != nullptr);
+    bool isCached = domain && domain->isCached();
     Domain::State state = domain ? domain->state() : Domain::StateNoState;
 
     // Calculate enabled states for toolbar actions
-    bool canStart = hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState);
-    bool canStop = hasSelection && (state == Domain::StateRunning || state == Domain::StateBlocked);
-    bool canReboot = hasSelection && (state == Domain::StateRunning);
-    bool canPause = hasSelection && (state == Domain::StateRunning);
-    bool canResume = hasSelection && (state == Domain::StatePaused);
-    bool canDelete = hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
-    bool canOpenConsole = hasSelection;
+    // Disable all actions for cached VMs (no live connection)
+    bool canStart = !isCached && hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState);
+    bool canStop = !isCached && hasSelection && (state == Domain::StateRunning || state == Domain::StateBlocked);
+    bool canReboot = !isCached && hasSelection && (state == Domain::StateRunning);
+    bool canPause = !isCached && hasSelection && (state == Domain::StateRunning);
+    bool canResume = !isCached && hasSelection && (state == Domain::StatePaused);
+    bool canDelete = !isCached && hasSelection && (state == Domain::StateShutOff || state == Domain::StateNoState || state == Domain::StateRunning);
+    bool canOpenConsole = !isCached && hasSelection;
 
     // Update toolbar actions
     if (m_actionStart) m_actionStart->setEnabled(canStart);
@@ -1013,9 +1035,7 @@ void ManagerWindow::onConnectionStateChanged(Connection::State state)
 
         m_statusLabel->setText(tr("Connected to: %1").arg(uri));
     } else if (state == Connection::ConnectionFailed) {
-        // Connection failed
-        // Remove the failed connection
-        conn->deleteLater();
+        // Connection failed - keep connection and show cached VMs
         m_connectingConnections.remove(uri);
 
         // Close progress dialog
@@ -1025,8 +1045,14 @@ void ManagerWindow::onConnectionStateChanged(Connection::State state)
             m_progressDialog = nullptr;
         }
 
+        // Load cached VMs for offline display
+        conn->loadVMCache();
+
+        // Add connection to tree (will show as disconnected with cached VMs)
+        m_treeModel->addConnection(conn);
+
         QMessageBox::warning(this, tr("Connection Failed"),
-            tr("Failed to connect to: %1\n\n%2").arg(uri, conn->connectionError()));
+            tr("Failed to connect to: %1\n\n%2\n\nShowing cached VMs.").arg(uri, conn->connectionError()));
     } else if (state == Connection::Connecting) {
         // Still connecting - update status
         m_statusLabel->setText(tr("Connecting to %1...").arg(uri));

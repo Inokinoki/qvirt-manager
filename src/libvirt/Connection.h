@@ -133,6 +133,11 @@ public:
     QString sshKeyPath() const { return m_sshKeyPath; }
     QString sshUsername() const { return m_sshUsername; }
 
+    // VM Cache management
+    void saveVMCache() const;
+    void loadVMCache();
+    void clearVMCache() const;
+
 signals:
     void stateChanged(State newState);
     void connectionProgress(const QString &status);

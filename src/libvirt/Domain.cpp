@@ -32,30 +32,36 @@ Domain::Domain(Connection *conn, virDomainPtr domain)
     , m_prevCpuTimestamp(0)
     , m_cachedCpuUsage(0.0f)
 {
-    // Get domain name
-    const char *name = virDomainGetName(m_domain);
-    if (name) {
-        m_name = QString::fromUtf8(name);
+    // Only call libvirt functions if we have a valid virDomainPtr
+    // For cached domains (m_domain == nullptr), values will be set by fromCacheInfo()
+    if (m_domain) {
+        // Get domain name
+        const char *name = virDomainGetName(m_domain);
+        if (name) {
+            m_name = QString::fromUtf8(name);
+        }
+
+        // Get domain UUID
+        char uuid[VIR_UUID_STRING_BUFLEN];
+        if (virDomainGetUUIDString(m_domain, uuid) == 0) {
+            m_uuid = QString::fromUtf8(uuid);
+        }
+
+        // Get domain ID
+        int id = virDomainGetID(m_domain);
+        if (id >= 0) {
+            m_id = QString::number(id);
+        } else {
+            m_id = "-";
+        }
+
+        // Initialize with current info
+        updateInfo();
+
+        qDebug() << "Created Domain wrapper for" << m_name << "(" << m_uuid << ")";
     }
-
-    // Get domain UUID
-    char uuid[VIR_UUID_STRING_BUFLEN];
-    if (virDomainGetUUIDString(m_domain, uuid) == 0) {
-        m_uuid = QString::fromUtf8(uuid);
-    }
-
-    // Get domain ID
-    int id = virDomainGetID(m_domain);
-    if (id >= 0) {
-        m_id = QString::number(id);
-    } else {
-        m_id = "-";
-    }
-
-    // Initialize with current info
-    updateInfo();
-
-    qDebug() << "Created Domain wrapper for" << m_name << "(" << m_uuid << ")";
+    // For cached domains (m_domain == nullptr), no libvirt calls are made
+    // The caller (fromCacheInfo) will set the member variables directly
 }
 
 Domain::~Domain()
@@ -728,6 +734,39 @@ bool Domain::guestAgentShutdown(int timeout)
     Q_UNUSED(timeout);
     return false;
 #endif
+}
+
+// Serialization for caching
+Domain::CacheInfo Domain::toCacheInfo() const
+{
+    CacheInfo info;
+    info.name = m_name;
+    info.uuid = m_uuid;
+    info.state = static_cast<int>(m_state);
+    info.description = m_description;
+    info.title = m_title;
+    info.memory = m_maxMemory;
+    info.vcpuCount = m_vcpuCount;
+    info.xmlDesc = getXMLDesc();
+    info.lastUpdated = QDateTime::currentMSecsSinceEpoch();
+    return info;
+}
+
+Domain *Domain::fromCacheInfo(Connection *conn, const CacheInfo &info)
+{
+    // Create a minimal Domain object from cached info
+    // Note: This domain won't have a valid virDomainPtr, so operations requiring
+    // libvirt will fail. It's meant for display purposes until the connection
+    // is refreshed and the domain is reloaded from libvirt.
+    auto *domain = new Domain(conn, nullptr);
+    domain->m_name = info.name;
+    domain->m_uuid = info.uuid;
+    domain->m_state = static_cast<State>(info.state);
+    domain->m_description = info.description;
+    domain->m_title = info.title;
+    domain->m_maxMemory = info.memory;
+    domain->m_vcpuCount = info.vcpuCount;
+    return domain;
 }
 
 } // namespace QVirt

@@ -41,6 +41,9 @@ QMenu* VMContextMenu::createMenu(QWidget *parent, Domain *domain)
 {
     auto *menu = new QMenu(parent);
 
+    // Check if VM is cached (offline/disconnected)
+    bool isCached = domain && domain->isCached();
+
     // VM Actions
     auto *startAction = menu->addAction("Start");
     startAction->setIcon(QIcon::fromTheme("media-playback-start"));
@@ -61,48 +64,56 @@ QMenu* VMContextMenu::createMenu(QWidget *parent, Domain *domain)
     connect(pauseAction, &QAction::triggered, this, &VMContextMenu::pauseRequested);
 
     // Enable/disable based on VM state
+    // All actions disabled for cached VMs (no live connection)
     if (domain) {
         bool isRunning = (domain->state() == Domain::StateRunning);
         bool isPaused = (domain->state() == Domain::StatePaused);
 
-        startAction->setEnabled(!isRunning && !isPaused);
-        stopAction->setEnabled(isRunning || isPaused);
-        rebootAction->setEnabled(isRunning);
-        pauseAction->setEnabled(isRunning);
+        startAction->setEnabled(!isCached && !isRunning && !isPaused);
+        stopAction->setEnabled(!isCached && (isRunning || isPaused));
+        rebootAction->setEnabled(!isCached && isRunning);
+        pauseAction->setEnabled(!isCached && isRunning);
     }
 
     menu->addSeparator();
 
-    // Advanced actions
+    // Advanced actions - disabled for cached VMs
     auto *consoleAction = menu->addAction("Open Console");
     consoleAction->setIcon(QIcon::fromTheme("video-display"));
     connect(consoleAction, &QAction::triggered, this, &VMContextMenu::openConsoleRequested);
+    consoleAction->setEnabled(!isCached);
 
     auto *detailsAction = menu->addAction("View Details");
     detailsAction->setIcon(QIcon::fromTheme("document-properties"));
     connect(detailsAction, &QAction::triggered, this, &VMContextMenu::viewDetailsRequested);
+    // Details can be viewed for cached VMs (read-only)
+    detailsAction->setEnabled(true);
 
     auto *snapshotAction = menu->addAction("Take Snapshot");
     snapshotAction->setIcon(QIcon::fromTheme("camera-photo"));
     connect(snapshotAction, &QAction::triggered, this, &VMContextMenu::takeSnapshotRequested);
+    snapshotAction->setEnabled(!isCached);
 
     menu->addSeparator();
 
-    // Management actions
+    // Management actions - disabled for cached VMs
     auto *cloneAction = menu->addAction("Clone...");
     cloneAction->setIcon(QIcon::fromTheme("edit-copy"));
     connect(cloneAction, &QAction::triggered, this, &VMContextMenu::cloneRequested);
+    cloneAction->setEnabled(!isCached);
 
     auto *migrateAction = menu->addAction("Migrate...");
     migrateAction->setIcon(QIcon::fromTheme("system-run"));
     connect(migrateAction, &QAction::triggered, this, &VMContextMenu::migrateRequested);
+    migrateAction->setEnabled(!isCached);
 
     menu->addSeparator();
 
-    // Destructive actions
+    // Destructive actions - disabled for cached VMs
     auto *deleteAction = menu->addAction("Delete...");
     deleteAction->setIcon(QIcon::fromTheme("edit-delete"));
     connect(deleteAction, &QAction::triggered, this, &VMContextMenu::deleteRequested);
+    deleteAction->setEnabled(!isCached);
 
     return menu;
 }

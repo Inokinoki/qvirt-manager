@@ -195,6 +195,10 @@ QVariant ConnectionTreeModel::data(const QModelIndex &index, int role) const
             if (item->domain()->state() == Domain::StateRunning) {
                 return "[Running] " + name;
             }
+            // For cached VMs (offline), show [Cached] prefix
+            if (item->domain()->isCached()) {
+                return "[Cached] " + name;
+            }
         }
         return name;
     }
@@ -204,11 +208,19 @@ QVariant ConnectionTreeModel::data(const QModelIndex &index, int role) const
         if (item->isDisconnected()) {
             font.setItalic(true);
         }
+        // Also italic for cached VMs
+        if (item->type() == TreeItem::VMItem && item->domain() && item->domain()->isCached()) {
+            font.setItalic(true);
+        }
         return font;
     }
 
     case Qt::ForegroundRole: {
         if (item->isDisconnected()) {
+            return QVariant::fromValue(QColor(Qt::gray));
+        }
+        // Gray color for cached VMs (offline)
+        if (item->type() == TreeItem::VMItem && item->domain() && item->domain()->isCached()) {
             return QVariant::fromValue(QColor(Qt::gray));
         }
         return QVariant();
@@ -221,6 +233,19 @@ QVariant ConnectionTreeModel::data(const QModelIndex &index, int role) const
             return QIcon::fromTheme("network-server", QApplication::style()->standardIcon(QStyle::SP_DriveNetIcon));
         } else if (item->type() == TreeItem::VMItem && item->domain()) {
             Domain::State state = item->domain()->state();
+            // Use semi-transparent icon for cached VMs
+            if (item->domain()->isCached()) {
+                switch (state) {
+                case Domain::StateRunning:
+                    return QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay));
+                case Domain::StatePaused:
+                    return QIcon::fromTheme("media-playback-pause", QApplication::style()->standardIcon(QStyle::SP_MediaPause));
+                case Domain::StateShutOff:
+                    return QIcon::fromTheme("computer", QApplication::style()->standardIcon(QStyle::SP_DesktopIcon));
+                default:
+                    return QIcon::fromTheme("computer", QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
+                }
+            }
             switch (state) {
             case Domain::StateRunning:
                 return QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay));
@@ -252,6 +277,12 @@ QVariant ConnectionTreeModel::data(const QModelIndex &index, int role) const
 
     case IsVMRole:
         return item->type() == TreeItem::VMItem;
+
+    case IsCachedRole:
+        if (item->domain()) {
+            return item->domain()->isCached();
+        }
+        return false;
 
     case DomainRole:
         return QVariant::fromValue(static_cast<void*>(item->domain()));
@@ -297,12 +328,17 @@ void ConnectionTreeModel::addConnection(Connection *conn)
     }
 
     QString uri = conn->uri();
+    qDebug() << "ConnectionTreeModel::addConnection called for URI:" << uri;
+    qDebug() << "  Connection state:" << conn->state();
+    qDebug() << "  Connection domains count:" << conn->domains().count();
 
-    // Check if we already have this connection
+    // Check if we already have this connection (could be disconnected with cached VMs)
     TreeItem *existingItem = findConnectionItem(uri);
     if (existingItem) {
-        // Update existing item
+        qDebug() << "  Found existing connection item, children count:" << existingItem->children().count();
+        // Update existing item with live connection
         existingItem->setConnection(conn);
+        existingItem->setConnectionInfo(nullptr);
         m_connectionToItem[conn] = existingItem;
         updateConnectionDisplay(existingItem);
 
@@ -317,23 +353,111 @@ void ConnectionTreeModel::addConnection(Connection *conn)
         connect(conn, &Connection::domainRemoved,
                 this, &ConnectionTreeModel::onDomainRemoved);
 
-        // Add existing domains
-        QList<Domain *> existingDomains = conn->domains();
-        if (!existingDomains.isEmpty()) {
-            int childRow = existingItem->children().count();
-            beginInsertRows(idx, childRow, childRow + existingDomains.count() - 1);
-            
-            for (Domain *domain : existingDomains) {
-                TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), existingItem);
-                vmItem->setDomain(domain);
-                existingItem->addChild(vmItem);
-                
-                // Connect to domain signals
-                connect(domain, &Domain::stateChanged,
-                        this, &ConnectionTreeModel::onDomainStateChanged);
+        // Update cached VMs with live data - only if connection is active
+        if (conn->state() == Connection::Active) {
+            QList<Domain *> liveDomains = conn->domains();
+            QModelIndex connIndex = index(existingItem->row(), 0, QModelIndex());
+
+            // If connection is active but has no domains yet AND tree has no children,
+            // load cached VMs to show something while live data loads
+            if (liveDomains.isEmpty() && existingItem->children().isEmpty()) {
+                qDebug() << "  Connection active but no domains loaded yet, loading cached VMs for immediate display";
+                conn->loadVMCache();
+                QList<Domain *> cachedDomains = conn->domains();
+
+                if (!cachedDomains.isEmpty()) {
+                    beginInsertRows(connIndex, 0, cachedDomains.count() - 1);
+
+                    for (Domain *domain : cachedDomains) {
+                        TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), existingItem);
+                        vmItem->setDomain(domain);
+                        existingItem->addChild(vmItem);
+                        qDebug() << "    Added cached VM to tree (initial load):" << domain->name();
+
+                        // Connect to domain signals (for when connection is refreshed)
+                        connect(domain, &Domain::stateChanged,
+                                this, &ConnectionTreeModel::onDomainStateChanged);
+                    }
+
+                    endInsertRows();
+                }
             }
-            
-            endInsertRows();
+
+            // Build a map of live domains by UUID for quick lookup
+            QMap<QString, Domain*> liveDomainMap;
+            for (Domain *domain : liveDomains) {
+                liveDomainMap[domain->uuid()] = domain;
+            }
+
+            // Update or remove cached VMs
+            QList<TreeItem*> cachedItems = existingItem->children();
+            for (int i = cachedItems.size() - 1; i >= 0; i--) {
+                TreeItem *vmItem = cachedItems.at(i);
+                if (vmItem->type() == TreeItem::VMItem && vmItem->domain()) {
+                    Domain *cachedDomain = vmItem->domain();
+                    QString uuid = cachedDomain->uuid();
+
+                    if (liveDomainMap.contains(uuid)) {
+                        // VM exists in live data - update it with live domain
+                        Domain *liveDomain = liveDomainMap.take(uuid);
+                        vmItem->setDomain(liveDomain);
+                        // Connect to domain signals
+                        connect(liveDomain, &Domain::stateChanged,
+                                this, &ConnectionTreeModel::onDomainStateChanged);
+                        // Update display name
+                        vmItem->setDisplayName(liveDomain->name());
+                        emit dataChanged(index(vmItem->row(), 0, connIndex),
+                                         index(vmItem->row(), 0, connIndex));
+                    } else {
+                        // VM no longer exists - remove cached item
+                        beginRemoveRows(connIndex, vmItem->row(), vmItem->row());
+                        existingItem->removeChild(vmItem);
+                        delete vmItem;
+                        endRemoveRows();
+                    }
+                }
+            }
+
+            // Add new VMs that weren't in cache
+            if (!liveDomainMap.isEmpty()) {
+                int insertRow = existingItem->children().count();
+                beginInsertRows(connIndex, insertRow, insertRow + liveDomainMap.count() - 1);
+
+                for (Domain *domain : liveDomainMap) {
+                    TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), existingItem);
+                    vmItem->setDomain(domain);
+                    existingItem->addChild(vmItem);
+
+                    // Connect to domain signals
+                    connect(domain, &Domain::stateChanged,
+                            this, &ConnectionTreeModel::onDomainStateChanged);
+                }
+
+                endInsertRows();
+            }
+        } else {
+            // Connection is not active (failed/disconnected) - add cached VMs to the tree
+            // The cached VMs are already in conn->domains() from loadVMCache()
+            QList<Domain *> cachedDomains = conn->domains();
+            qDebug() << "  Connection not active, adding" << cachedDomains.count() << "cached VMs to tree";
+
+            if (!cachedDomains.isEmpty()) {
+                QModelIndex connIndex = index(existingItem->row(), 0, QModelIndex());
+                beginInsertRows(connIndex, 0, cachedDomains.count() - 1);
+
+                for (Domain *domain : cachedDomains) {
+                    TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), existingItem);
+                    vmItem->setDomain(domain);
+                    existingItem->addChild(vmItem);
+                    qDebug() << "    Added cached VM to tree:" << domain->name();
+
+                    // Connect to domain signals (for when connection is restored)
+                    connect(domain, &Domain::stateChanged,
+                            this, &ConnectionTreeModel::onDomainStateChanged);
+                }
+
+                endInsertRows();
+            }
         }
 
         return;
@@ -365,17 +489,17 @@ void ConnectionTreeModel::addConnection(Connection *conn)
     if (!existingDomains.isEmpty()) {
         QModelIndex connIndex = index(row, 0, QModelIndex());
         beginInsertRows(connIndex, 0, existingDomains.count() - 1);
-        
+
         for (Domain *domain : existingDomains) {
             TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), connItem);
             vmItem->setDomain(domain);
             connItem->addChild(vmItem);
-            
+
             // Connect to domain signals
             connect(domain, &Domain::stateChanged,
                     this, &ConnectionTreeModel::onDomainStateChanged);
         }
-        
+
         endInsertRows();
     }
 }
@@ -394,6 +518,14 @@ void ConnectionTreeModel::removeConnection(Connection *conn)
 
     int row = connItem->row();
 
+    // Save cached VM info before disconnecting
+    QList<Domain::CacheInfo> cachedVMs;
+    for (TreeItem *vmItem : connItem->children()) {
+        if (vmItem->type() == TreeItem::VMItem && vmItem->domain()) {
+            cachedVMs.append(vmItem->domain()->toCacheInfo());
+        }
+    }
+
     // Disconnect signals
     disconnect(conn, nullptr, this, nullptr);
 
@@ -402,13 +534,26 @@ void ConnectionTreeModel::removeConnection(Connection *conn)
     ConnectionInfo *info = new ConnectionInfo(uri);
     connItem->setConnectionInfo(info);
 
-    // Clear all VM children
+    // Convert VM children to cached items instead of removing them
     QModelIndex connIndex = index(row, 0, QModelIndex());
     int childCount = connItem->children().count();
     if (childCount > 0) {
         beginRemoveRows(connIndex, 0, childCount - 1);
         connItem->clearChildren();
         endRemoveRows();
+    }
+
+    // Re-add VMs as cached items
+    if (!cachedVMs.isEmpty()) {
+        beginInsertRows(connIndex, 0, cachedVMs.count() - 1);
+        for (const Domain::CacheInfo &cacheInfo : cachedVMs) {
+            TreeItem *vmItem = new TreeItem(TreeItem::VMItem, cacheInfo.name, connItem);
+            // Create a cached domain (no live virDomainPtr)
+            Domain *cachedDomain = Domain::fromCacheInfo(nullptr, cacheInfo);
+            vmItem->setDomain(cachedDomain);
+            connItem->addChild(vmItem);
+        }
+        endInsertRows();
     }
 
     updateConnectionDisplay(connItem);
@@ -505,13 +650,18 @@ void ConnectionTreeModel::refresh()
 QModelIndex ConnectionTreeModel::connectionIndex(Connection *conn) const
 {
     if (!conn) {
+        qDebug() << "connectionIndex: conn is null";
         return QModelIndex();
     }
 
     TreeItem *item = findConnectionItem(conn);
+    qDebug() << "connectionIndex: conn=" << conn << "item=" << item << "uri=" << conn->uri();
     if (item) {
-        return createIndex(item->row(), 0, item);
+        QModelIndex idx = createIndex(item->row(), 0, item);
+        qDebug() << "  Created index: row=" << item->row() << "valid=" << idx.isValid();
+        return idx;
     }
+    qDebug() << "  Item not found in m_connectionToItem";
     return QModelIndex();
 }
 
@@ -540,12 +690,20 @@ void ConnectionTreeModel::updateConnectionDisplay(TreeItem *item)
 
 TreeItem* ConnectionTreeModel::findConnectionItem(const QString &uri) const
 {
-    return m_connectionItems.value(uri);
+    TreeItem *item = m_connectionItems.value(uri);
+    qDebug() << "findConnectionItem for URI:" << uri << "result:" << (item ? "found" : "not found");
+    if (item) {
+        qDebug() << "  Item children count:" << item->children().count();
+        qDebug() << "  Item type:" << item->type() << "isConnected:" << item->isConnected();
+    }
+    return item;
 }
 
 TreeItem* ConnectionTreeModel::findConnectionItem(Connection *conn) const
 {
-    return m_connectionToItem.value(conn);
+    TreeItem *item = m_connectionToItem.value(conn);
+    qDebug() << "findConnectionItem(Connection*) for conn=" << conn << "result:" << (item ? "found" : "not found");
+    return item;
 }
 
 TreeItem* ConnectionTreeModel::findVMItem(TreeItem *connItem, Domain *domain) const

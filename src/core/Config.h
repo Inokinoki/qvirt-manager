@@ -17,6 +17,9 @@
 #include <QStringList>
 #include <QMap>
 #include <QSize>
+#include <QDir>
+#include <QStandardPaths>
+#include <QDomDocument>
 
 namespace QVirt {
 
@@ -32,6 +35,33 @@ struct ConnectionInfo
 
     ConnectionInfo() = default;
     explicit ConnectionInfo(const QString &uri) : uri(uri) {}
+};
+
+/**
+ * @brief Cached VM information structure
+ *
+ * Stores essential VM data for local caching:
+ * - Basic identity (name, UUID)
+ * - Last known state
+ * - Configuration summary
+ * - Last updated timestamp
+ */
+struct VMCacheInfo
+{
+    QString name;
+    QString uuid;
+    int state = 0;  // QVirt::Domain::State enum value
+    QString description;
+    QString title;
+    quint64 memory = 0;  // in KB
+    int vcpuCount = 0;
+    QString xmlDesc;  // Full XML configuration
+    qint64 lastUpdated = 0;  // Unix timestamp
+
+    VMCacheInfo() = default;
+
+    explicit VMCacheInfo(const QString &name, const QString &uuid)
+        : name(name), uuid(uuid) {}
 };
 
 /**
@@ -73,6 +103,16 @@ public:
     // Per-VM settings
     void setVMWindowSize(const QString &uri, const QString &uuid, const QSize &size);
     QSize vmWindowSize(const QString &uri, const QString &uuid, const QSize &defaultSize = QSize(800, 600)) const;
+
+    // VM Cache - save/load VM information per connection
+    // Uses XML files in QStandardPaths::AppDataLocation for storage
+    // Connection URI is sanitized to a filesystem-safe name
+    void saveVMCache(const QString &uri, const QString &uuid, const VMCacheInfo &info);
+    VMCacheInfo loadVMCache(const QString &uri, const QString &uuid) const;
+    QList<VMCacheInfo> loadAllVMCache(const QString &uri) const;
+    void removeVMCache(const QString &uri, const QString &uuid);
+    void clearVMCache(const QString &uri);
+    QStringList cachedVMUUIDs(const QString &uri) const;
 
     // General settings
     void setConsoleResizeGuest(bool enable);
@@ -126,6 +166,11 @@ signals:
     void valueChanged(const QString &key);
 
 private:
+    // Helper to convert URI to filesystem-safe name
+    static QString sanitizeUriToFilename(const QString &uri);
+    // Get the cache directory for a connection
+    QDir getVMCacheDir(const QString &uri) const;
+
     Config();
     ~Config() override = default;
     Config(const Config &) = delete;

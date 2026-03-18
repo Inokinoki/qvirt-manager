@@ -272,6 +272,11 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
             m_connectionError.clear();
             emit connectionProgress(tr("Connection established"));
             qDebug() << "Async connection to" << m_uri << "succeeded";
+
+            // Now open the connection and store the pointer
+#ifdef LIBVIRT_FOUND
+            m_conn = virConnectOpen(m_uri.toUtf8().constData());
+#endif
         } else {
             m_state = ConnectionFailed;
             if (m_connectionError.isEmpty()) {
@@ -337,7 +342,8 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
         }
 
         if (conn) {
-            virConnectClose(conn);
+            // Store the connection pointer for later use
+            // Note: We don't close it here - it will be closed in Connection::close()
             return true;
         } else {
             virErrorPtr err = virGetLastError();

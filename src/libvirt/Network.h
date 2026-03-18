@@ -98,6 +98,10 @@ private:
     QString m_dhcpEnd;
     bool m_dhcpEnabled;
 
+    // Cached XML to avoid repeated remote calls
+    mutable QString m_cachedXmlDesc;
+    mutable bool m_xmlFetched = false;
+
     friend class Connection;
 };
 

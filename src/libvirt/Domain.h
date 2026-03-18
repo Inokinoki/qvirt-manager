@@ -111,8 +111,15 @@ public:
     float diskUsage() const;  // percentage
     float networkUsage() const;  // percentage
 
-    // Update cached info
+    // Update cached info (synchronous - may block)
     void updateInfo();
+
+    // Update cached info with minimal data (no XML, faster)
+    void updateInfoMinimal();
+
+    // Update cached info (asynchronous - non-blocking)
+    void updateInfoAsync();
+    void updateInfoAsync(bool fetchXml);  // Option to skip XML fetching
 
     // Snapshot operations
     QList<DomainSnapshot*> snapshots() const;
@@ -188,6 +195,10 @@ signals:
     void configChanged();
     void statsUpdated();
 
+    // Async operation completion signals
+    void infoUpdated();
+    void infoUpdateFailed();
+
 private:
     Domain(Connection *conn, virDomainPtr domain);
     void setState(State state);
@@ -217,6 +228,9 @@ private:
     quint64 m_prevCpuTime;
     qint64 m_prevCpuTimestamp;
     float m_cachedCpuUsage;
+
+    // Track if XML has been fetched
+    bool m_xmlFetched;
 
     friend class Connection;
 };

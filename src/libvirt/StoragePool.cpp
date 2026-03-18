@@ -77,8 +77,13 @@ StoragePool::StoragePool(Connection *conn, virStoragePoolPtr pool)
     // Get and parse XML to determine pool type
     char *xml = virStoragePoolGetXMLDesc(m_pool, 0);
     if (xml) {
-        parseXML(QString::fromUtf8(xml));
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
         free(xml);
+
+        // Cache the XML for future use
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
     } else {
         qWarning() << "Failed to get XML for storage pool" << m_name;
     }
@@ -131,6 +136,42 @@ bool StoragePool::refresh()
     }
 
     return (virStoragePoolRefresh(m_pool, 0) == 0);
+}
+
+void StoragePool::updateInfo()
+{
+    if (!m_pool) {
+        return;
+    }
+
+    // Refresh pool state
+    int isActive = virStoragePoolIsActive(m_pool);
+    if (isActive >= 0) {
+        m_active = (isActive == 1);
+        m_state = m_active ? StateRunning : StateInactive;
+    }
+
+    // Refresh capacity/allocation info
+    virStoragePoolInfo poolInfo;
+    int infoRet = virStoragePoolGetInfo(m_pool, &poolInfo);
+    if (infoRet == 0) {
+        m_capacity = poolInfo.capacity;
+        m_allocation = poolInfo.allocation;
+        m_available = poolInfo.available;
+        m_state = static_cast<PoolState>(poolInfo.state);
+    }
+
+    // Refresh and cache XML
+    char *xml = virStoragePoolGetXMLDesc(m_pool, 0);
+    if (xml) {
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
+        free(xml);
+
+        // Update cached XML
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
+    }
 }
 
 bool StoragePool::undefine()

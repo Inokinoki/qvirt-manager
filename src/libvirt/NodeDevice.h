@@ -44,6 +44,10 @@ public:
     QString name() const { return m_name; }
     QString parent() const { return m_parent; }
 
+    // XML operations
+    QString getXMLDesc(unsigned int flags = 0);
+    void updateInfo();
+
 signals:
     void stateChanged();
 
@@ -55,6 +59,10 @@ private:
 
     QString m_name;
     QString m_parent;
+
+    // Cached XML to avoid repeated remote calls
+    mutable QString m_cachedXmlDesc;
+    mutable bool m_xmlFetched = false;
 
     friend class Connection;
 };

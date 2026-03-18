@@ -96,6 +96,10 @@ private:
     qint64 m_allocation;
     QString m_format;
 
+    // Cached XML to avoid repeated remote calls
+    mutable QString m_cachedXmlDesc;
+    mutable bool m_xmlFetched = false;
+
     void parseXML(const QString &xml);
 };
 

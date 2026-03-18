@@ -30,6 +30,14 @@ NodeDevice::NodeDevice(Connection *conn, virNodeDevicePtr device)
         m_parent = QString::fromUtf8(parent);
     }
 
+    // Get and cache XML description
+    char *xml = virNodeDeviceGetXMLDesc(m_device, 0);
+    if (xml) {
+        m_cachedXmlDesc = QString::fromUtf8(xml);
+        m_xmlFetched = true;
+        free(xml);
+    }
+
     qDebug() << "Created NodeDevice wrapper for" << m_name;
 }
 
@@ -38,6 +46,46 @@ NodeDevice::~NodeDevice()
     if (m_device) {
         virNodeDeviceFree(m_device);
         m_device = nullptr;
+    }
+}
+
+QString NodeDevice::getXMLDesc(unsigned int flags)
+{
+    if (!m_device) {
+        return QString();
+    }
+
+    // Return cached XML if already fetched (avoid repeated remote calls)
+    if (m_xmlFetched && !m_cachedXmlDesc.isEmpty()) {
+        return m_cachedXmlDesc;
+    }
+
+    char *xml = virNodeDeviceGetXMLDesc(m_device, flags);
+    if (!xml) {
+        return QString();
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    // Cache the XML for future calls
+    m_cachedXmlDesc = xmlStr;
+    m_xmlFetched = true;
+    return xmlStr;
+}
+
+void NodeDevice::updateInfo()
+{
+    if (!m_device) {
+        return;
+    }
+
+    // Refresh and cache XML
+    char *xml = virNodeDeviceGetXMLDesc(m_device, 0);
+    if (xml) {
+        m_cachedXmlDesc = QString::fromUtf8(xml);
+        m_xmlFetched = true;
+        free(xml);
     }
 }
 

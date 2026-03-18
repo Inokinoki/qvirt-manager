@@ -37,8 +37,13 @@ DomainSnapshot::DomainSnapshot(virDomainSnapshotPtr snapshot, Domain *domain, QO
     // Get and parse XML description
     char *xml = virDomainSnapshotGetXMLDesc(m_snapshot, 0);
     if (xml) {
-        parseXML(QString::fromUtf8(xml));
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
         free(xml);
+
+        // Cache the XML for future getXMLDesc() calls
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
     }
 
     qDebug() << "Created DomainSnapshot wrapper for" << m_name;
@@ -150,14 +155,23 @@ QString DomainSnapshot::getXMLDesc(unsigned int flags)
         return QString();
     }
 
-    char *xml = virDomainSnapshotGetXMLDesc(m_snapshot, flags);
-    if (xml) {
-        QString result = QString::fromUtf8(xml);
-        free(xml);
-        return result;
+    // Return cached XML if already fetched (avoid repeated remote calls)
+    if (m_xmlFetched && !m_cachedXmlDesc.isEmpty()) {
+        return m_cachedXmlDesc;
     }
 
-    return QString();
+    char *xml = virDomainSnapshotGetXMLDesc(m_snapshot, flags);
+    if (!xml) {
+        return QString();
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    // Cache the XML for future calls
+    m_cachedXmlDesc = xmlStr;
+    m_xmlFetched = true;
+    return xmlStr;
 }
 
 void DomainSnapshot::parseXML(const QString &xml)

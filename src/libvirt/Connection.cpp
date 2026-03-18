@@ -19,6 +19,7 @@
 #include <QDebug>
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
+#include <tuple>
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
@@ -88,6 +89,12 @@ Connection::Connection(const QString &uri)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
+    , m_cachedHostname()
+    , m_cachedCapabilities()
+    , m_cachedLibvirtVersion()
+    , m_hostnameFetched(false)
+    , m_capabilitiesFetched(false)
+    , m_libvirtVersionFetched(false)
 {
     // Attempt to open the connection (no auth)
     m_conn = virConnectOpen(uri.toUtf8().constData());
@@ -115,6 +122,12 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
+    , m_cachedHostname()
+    , m_cachedCapabilities()
+    , m_cachedLibvirtVersion()
+    , m_hostnameFetched(false)
+    , m_capabilitiesFetched(false)
+    , m_libvirtVersionFetched(false)
 {
 #ifdef LIBVIRT_FOUND
     // Set up authentication data
@@ -234,6 +247,12 @@ Connection::Connection(const QString &uri, bool /* internal */)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
+    , m_cachedHostname()
+    , m_cachedCapabilities()
+    , m_cachedLibvirtVersion()
+    , m_hostnameFetched(false)
+    , m_capabilitiesFetched(false)
+    , m_libvirtVersionFetched(false)
 {
     // Do not attempt to open connection - used for cached VM display only
 }
@@ -253,6 +272,11 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
             m_connectionError.clear();
             emit connectionProgress(tr("Connection established"));
             qDebug() << "Async connection to" << m_uri << "succeeded";
+
+            // Now open the connection and store the pointer
+#ifdef LIBVIRT_FOUND
+            m_conn = virConnectOpen(m_uri.toUtf8().constData());
+#endif
         } else {
             m_state = ConnectionFailed;
             if (m_connectionError.isEmpty()) {
@@ -318,7 +342,8 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
         }
 
         if (conn) {
-            virConnectClose(conn);
+            // Store the connection pointer for later use
+            // Note: We don't close it here - it will be closed in Connection::close()
             return true;
         } else {
             virErrorPtr err = virGetLastError();
@@ -346,7 +371,50 @@ void Connection::refresh()
     if (!isOpen()) {
         return;
     }
-    initAllResources();
+
+    // Use polling methods for efficient refresh - they detect changes
+    // and only emit signals for actual additions/removals
+    // This is more efficient than initAllResources() which recreates everything
+    qDebug() << "Refreshing resources for" << m_uri << "using polling methods";
+
+    // Run polling to detect and update changes
+    pollDomains();
+    pollNetworks();
+    pollStoragePools();
+    pollNodeDevices();
+
+    // Update all domain stats
+    for (auto *domain : m_domains) {
+        if (domain) {
+            domain->updateInfo();  // Full update on manual refresh
+        }
+    }
+
+    // Update network info
+    for (auto *network : m_networks) {
+        if (network) {
+            network->updateInfo();
+        }
+    }
+
+    // Update storage pool info
+    for (auto *pool : m_storagePools) {
+        if (pool) {
+            pool->updateInfo();
+        }
+    }
+
+    // Update node device info
+    for (auto *device : m_nodeDevices) {
+        if (device) {
+            device->updateInfo();
+        }
+    }
+
+    // Save updated cache
+    saveVMCache();
+
+    qDebug() << "Refresh completed for" << m_uri;
 }
 
 
@@ -752,16 +820,21 @@ void Connection::tick()
     if (m_tickCounter % 5 == 0) {
         pollNetworks();
         pollStoragePools();
+        pollNodeDevices();
     }
 
     // Update all domain stats - only if we have domains
     if (!m_domains.isEmpty()) {
         for (auto *domain : m_domains) {
             if (domain) {
-                domain->updateInfo();
+                domain->updateInfoMinimal();  // Fast, no XML
             }
         }
     }
+
+    // Note: Network, StoragePool, and NodeDevice updates are only done during polling
+    // when changes are detected, to avoid blocking the UI with unnecessary libvirt calls.
+    // The poll*() methods create new objects with fresh data when devices are added.
 }
 
 void Connection::initAllResources()
@@ -1083,6 +1156,28 @@ void Connection::initAllResources()
         }
         delete[] poolNames;
     }
+
+    // List node devices
+    virNodeDevicePtr *devices = nullptr;
+    int numDevices = virConnectListAllNodeDevices(m_conn, &devices, 0);
+    if (numDevices >= 0 && devices) {
+        qDebug() << "Found" << numDevices << "node devices";
+        for (int i = 0; i < numDevices; i++) {
+            const char *name = virNodeDeviceGetName(devices[i]);
+            if (!name) {
+                virNodeDeviceFree(devices[i]);
+                continue;
+            }
+            QString deviceName = QString::fromUtf8(name);
+            auto *device = new NodeDevice(this, devices[i]);
+            m_nodeDevices[deviceName] = device;
+            qDebug() << "Added node device:" << deviceName;
+            emit nodeDeviceAdded(device);
+        }
+        free(devices);
+    } else {
+        qDebug() << "No node devices found or failed to list";
+    }
 }
 
 void Connection::pollDomains()
@@ -1358,6 +1453,59 @@ void Connection::pollStoragePools()
     }
 }
 
+void Connection::pollNodeDevices()
+{
+    // List all node devices
+    virNodeDevicePtr *devices = nullptr;
+    int numDevices = virConnectListAllNodeDevices(m_conn, &devices, 0);
+    if (numDevices < 0 || !devices) {
+        return;
+    }
+
+    QSet<QString> currentDeviceNames;
+
+    // Iterate through all devices
+    for (int i = 0; i < numDevices; i++) {
+        const char *name = virNodeDeviceGetName(devices[i]);
+        if (!name) {
+            virNodeDeviceFree(devices[i]);
+            continue;
+        }
+
+        QString deviceName = QString::fromUtf8(name);
+        currentDeviceNames.insert(deviceName);
+
+        if (!m_nodeDevices.contains(deviceName)) {
+            // New device found
+            auto *device = new NodeDevice(this, devices[i]);
+            m_nodeDevices[deviceName] = device;
+            qDebug() << "Poll: Added node device:" << deviceName;
+            emit nodeDeviceAdded(device);
+        } else {
+            // Device already exists, just free the pointer
+            virNodeDeviceFree(devices[i]);
+        }
+    }
+
+    // Check for removed devices
+    QStringList removedDevices;
+    for (auto it = m_nodeDevices.begin(); it != m_nodeDevices.end(); ++it) {
+        if (!currentDeviceNames.contains(it.key())) {
+            removedDevices.append(it.key());
+        }
+    }
+
+    for (const QString &name : removedDevices) {
+        NodeDevice *device = m_nodeDevices.take(name);
+        if (device) {
+            emit nodeDeviceRemoved(device);
+            delete device;
+        }
+    }
+
+    free(devices);
+}
+
 // VM Cache management
 void Connection::saveVMCache() const
 {
@@ -1453,6 +1601,291 @@ void Connection::clearVMCache() const
     auto *config = Config::instance();
     config->clearVMCache(m_uri);
     qDebug() << "Cleared VM cache for connection:" << m_uri;
+}
+
+// Async connection info fetching
+void Connection::fetchHostnameAsync()
+{
+    if (!isOpen()) {
+        emit fetchFailed(tr("Connection is not open"));
+        return;
+    }
+
+    QFutureWatcher<QString> *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        QString result = watcher->result();
+        m_cachedHostname = result;
+        m_hostnameFetched = true;
+        emit hostnameFetched(result);
+        watcher->deleteLater();
+    });
+    connect(watcher, &QFutureWatcher<QString>::canceled, this, [this, watcher]() {
+        emit fetchFailed(tr("Hostname fetch was canceled"));
+        watcher->deleteLater();
+    });
+
+    QFuture<QString> future = QtConcurrent::run([this]() -> QString {
+        if (!m_conn) {
+            return QString();
+        }
+        char *hostname = virConnectGetHostname(m_conn);
+        if (!hostname) {
+            return QString();
+        }
+        QString result = QString::fromUtf8(hostname);
+        free(hostname);
+        return result;
+    });
+
+    watcher->setFuture(future);
+}
+
+void Connection::fetchCapabilitiesAsync()
+{
+    if (!isOpen()) {
+        emit fetchFailed(tr("Connection is not open"));
+        return;
+    }
+
+    QFutureWatcher<QString> *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        QString result = watcher->result();
+        m_cachedCapabilities = result;
+        m_capabilitiesFetched = true;
+        emit capabilitiesFetched(result);
+        watcher->deleteLater();
+    });
+    connect(watcher, &QFutureWatcher<QString>::canceled, this, [this, watcher]() {
+        emit fetchFailed(tr("Capabilities fetch was canceled"));
+        watcher->deleteLater();
+    });
+
+    QFuture<QString> future = QtConcurrent::run([this]() -> QString {
+        if (!m_conn) {
+            return QString();
+        }
+        char *caps = virConnectGetCapabilities(m_conn);
+        if (!caps) {
+            return QString();
+        }
+        QString result = QString::fromUtf8(caps);
+        free(caps);
+        return result;
+    });
+
+    watcher->setFuture(future);
+}
+
+void Connection::fetchLibvirtVersionAsync()
+{
+    if (!isOpen()) {
+        emit fetchFailed(tr("Connection is not open"));
+        return;
+    }
+
+    QFutureWatcher<QString> *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        QString result = watcher->result();
+        m_cachedLibvirtVersion = result;
+        m_libvirtVersionFetched = true;
+        emit libvirtVersionFetched(result);
+        watcher->deleteLater();
+    });
+    connect(watcher, &QFutureWatcher<QString>::canceled, this, [this, watcher]() {
+        emit fetchFailed(tr("Libvirt version fetch was canceled"));
+        watcher->deleteLater();
+    });
+
+    QFuture<QString> future = QtConcurrent::run([this]() -> QString {
+        if (!m_conn) {
+            return "Libvirt (unknown version)";
+        }
+        unsigned long libvirtVersion = 0;
+        if (virConnectGetLibVersion(m_conn, &libvirtVersion) == 0) {
+            unsigned long major = libvirtVersion / 1000000;
+            unsigned long minor = (libvirtVersion % 1000000) / 1000;
+            unsigned long micro = libvirtVersion % 1000;
+            return QString("Libvirt %1.%2.%3").arg(major).arg(minor).arg(micro);
+        }
+        return "Libvirt (unknown version)";
+    });
+
+    watcher->setFuture(future);
+}
+
+void Connection::fetchConnectionInfoAsync()
+{
+    if (!isOpen()) {
+        emit fetchFailed(tr("Connection is not open"));
+        return;
+    }
+
+    QFutureWatcher<std::tuple<QString, QString, QString>> *watcher =
+        new QFutureWatcher<std::tuple<QString, QString, QString>>(this);
+
+    connect(watcher, &QFutureWatcher<std::tuple<QString, QString, QString>>::finished,
+            this, [this, watcher]() {
+        auto result = watcher->result();
+        m_cachedHostname = std::get<0>(result);
+        m_cachedCapabilities = std::get<1>(result);
+        m_cachedLibvirtVersion = std::get<2>(result);
+        m_hostnameFetched = true;
+        m_capabilitiesFetched = true;
+        m_libvirtVersionFetched = true;
+        emit connectionInfoFetched(
+            std::get<0>(result),
+            std::get<1>(result),
+            std::get<2>(result)
+        );
+        watcher->deleteLater();
+    });
+    connect(watcher, &QFutureWatcher<std::tuple<QString, QString, QString>>::canceled,
+            this, [this, watcher]() {
+        emit fetchFailed(tr("Connection info fetch was canceled"));
+        watcher->deleteLater();
+    });
+
+    QFuture<std::tuple<QString, QString, QString>> future = QtConcurrent::run([this]() {
+        QString hostname;
+        QString capabilities;
+        QString version;
+
+        if (m_conn) {
+            // Fetch hostname
+            char *h = virConnectGetHostname(m_conn);
+            if (h) {
+                hostname = QString::fromUtf8(h);
+                free(h);
+            }
+
+            // Fetch capabilities
+            char *c = virConnectGetCapabilities(m_conn);
+            if (c) {
+                capabilities = QString::fromUtf8(c);
+                free(c);
+            }
+
+            // Fetch version
+            unsigned long libvirtVersion = 0;
+            if (virConnectGetLibVersion(m_conn, &libvirtVersion) == 0) {
+                unsigned long major = libvirtVersion / 1000000;
+                unsigned long minor = (libvirtVersion % 1000000) / 1000;
+                unsigned long micro = libvirtVersion % 1000;
+                version = QString("Libvirt %1.%2.%3").arg(major).arg(minor).arg(micro);
+            } else {
+                version = "Libvirt (unknown version)";
+            }
+        }
+
+        return std::make_tuple(hostname, capabilities, version);
+    });
+
+    watcher->setFuture(future);
+}
+
+void Connection::fetchHostStatsAsync()
+{
+    if (!isOpen()) {
+        emit fetchFailed(tr("Connection is not open"));
+        return;
+    }
+
+    QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>> *watcher =
+        new QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>>(this);
+
+    connect(watcher, &QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>>::finished,
+            this, [this, watcher]() {
+        auto result = watcher->result();
+        int cpuUsage = std::get<0>(result);
+        unsigned long long memTotal = std::get<1>(result);
+        unsigned long long memUsed = std::get<2>(result);
+        emit hostStatsFetched(cpuUsage, memTotal, memUsed);
+        watcher->deleteLater();
+    });
+    connect(watcher, &QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>>::canceled,
+            this, [this, watcher]() {
+        emit fetchFailed(tr("Host stats fetch was canceled"));
+        watcher->deleteLater();
+    });
+
+    QFuture<std::tuple<int, unsigned long long, unsigned long long>> future =
+        QtConcurrent::run([this]() {
+#ifdef LIBVIRT_FOUND
+            int cpuUsage = 0;
+            unsigned long long memTotal = 0;
+            unsigned long long memUsed = 0;
+
+            // Get CPU stats
+            int nparams = 0;
+            if (virNodeGetCPUStats(m_conn, -1, nullptr, &nparams, 0) >= 0 && nparams > 0) {
+                virNodeCPUStats *params = new virNodeCPUStats[nparams];
+                memset(params, 0, sizeof(virNodeCPUStats) * nparams);
+
+                if (virNodeGetCPUStats(m_conn, -1, params, &nparams, 0) >= 0) {
+                    unsigned long long userTime = 0;
+                    unsigned long long kernelTime = 0;
+                    unsigned long long idleTime = 0;
+                    unsigned long long iowaitTime = 0;
+
+                    for (int i = 0; i < nparams; i++) {
+                        if (strcmp(params[i].field, "idle") == 0) {
+                            idleTime = params[i].value;
+                        } else if (strcmp(params[i].field, "user") == 0) {
+                            userTime = params[i].value;
+                        } else if (strcmp(params[i].field, "kernel") == 0) {
+                            kernelTime = params[i].value;
+                        } else if (strcmp(params[i].field, "iowait") == 0) {
+                            iowaitTime = params[i].value;
+                        }
+                    }
+
+                    unsigned long long totalTime = userTime + kernelTime + idleTime + iowaitTime;
+
+                    if (m_lastCPUTime > 0 && totalTime > m_lastCPUTime) {
+                        unsigned long long totalDiff = totalTime - m_lastCPUTime;
+                        unsigned long long idleDiff = idleTime - m_lastIdleTime;
+                        if (totalDiff > 0) {
+                            cpuUsage = 100 - ((idleDiff * 100) / totalDiff);
+                            if (cpuUsage < 0) cpuUsage = 0;
+                            if (cpuUsage > 100) cpuUsage = 100;
+                        }
+                    }
+
+                    m_lastCPUTime = totalTime;
+                    m_lastIdleTime = idleTime;
+                }
+                delete[] params;
+            }
+
+            // Get memory stats
+            nparams = 0;
+            if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, nullptr, &nparams, 0) >= 0) {
+                if (nparams > 0) {
+                    virNodeMemoryStats *params = new virNodeMemoryStats[nparams];
+                    if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, params, &nparams, 0) >= 0) {
+                        for (int i = 0; i < nparams; i++) {
+                            if (strcmp(params[i].field, "total") == 0) {
+                                memTotal = params[i].value;
+                            } else if (strcmp(params[i].field, "free") == 0) {
+                                memUsed = params[i].value;  // Will calculate used later
+                            }
+                        }
+                        // Calculate used memory
+                        if (memTotal >= memUsed) {
+                            memUsed = memTotal - memUsed;
+                        }
+                    }
+                    delete[] params;
+                }
+            }
+
+            return std::make_tuple(cpuUsage, memTotal, memUsed);
+#else
+            return std::make_tuple(0, 0ULL, 0ULL);
+#endif
+        });
+
+    watcher->setFuture(future);
 }
 
 } // namespace QVirt

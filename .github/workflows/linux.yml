@@ -48,7 +48,9 @@ jobs:
                   -DQT_VERSION_MAJOR=${{ matrix.qt_version }} \
                   -DCMAKE_INSTALL_PREFIX=/usr .. &&
             make -j\$(nproc) &&
-            (QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true) &&
+            echo '=== Running CTest ===' &&
+            QT_QPA_PLATFORM=offscreen ctest --output-on-failure --verbose &&
+            echo '=== CTest Complete ===' &&
             make install || true
             exit 0
           "

@@ -80,7 +80,7 @@ QVariant ConnectionListModel::data(const QModelIndex &index, int role) const
     case StateRole:
         return conn ? static_cast<int>(conn->state()) : static_cast<int>(Connection::Disconnected);
     case HostnameRole:
-        return conn ? conn->hostname() : QString();
+        return conn ? conn->cachedHostname() : QString();
     case DomainCountRole:
         return conn ? conn->domains().count() : 0;
     case NetworkCountRole:
@@ -145,6 +145,11 @@ void ConnectionListModel::addConnection(Connection *conn)
             this, &ConnectionListModel::onDomainAdded);
     connect(conn, &Connection::domainRemoved,
             this, &ConnectionListModel::onDomainRemoved);
+    connect(conn, &Connection::hostnameFetched,
+            this, &ConnectionListModel::onHostnameFetched);
+
+    // Start async hostname fetch for the new connection
+    conn->fetchHostnameAsync();
 
     endInsertRows();
 }
@@ -270,6 +275,21 @@ void ConnectionListModel::onDomainAdded(QVirt::Domain *domain)
 void ConnectionListModel::onDomainRemoved(QVirt::Domain *domain)
 {
     Q_UNUSED(domain);
+
+    Connection *conn = qobject_cast<Connection*>(sender());
+    if (!conn) {
+        return;
+    }
+
+    int index = m_connections.indexOf(conn);
+    if (index >= 0) {
+        emit dataChanged(createIndex(index, 0), createIndex(index, 0));
+    }
+}
+
+void ConnectionListModel::onHostnameFetched(const QString &hostname)
+{
+    Q_UNUSED(hostname);
 
     Connection *conn = qobject_cast<Connection*>(sender());
     if (!conn) {

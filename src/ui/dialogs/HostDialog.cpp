@@ -43,6 +43,14 @@ HostDialog::HostDialog(Connection *conn, QWidget *parent)
     m_refreshTimer = new QTimer(this);
     connect(m_refreshTimer, &QTimer::timeout, this, &HostDialog::refresh);
     m_refreshTimer->start(2000);
+
+    // Connect async signals
+    connect(m_connection, &Connection::connectionInfoFetched,
+            this, &HostDialog::onConnectionInfoFetched);
+    connect(m_connection, &Connection::hostStatsFetched,
+            this, &HostDialog::onHostStatsFetched);
+    connect(m_connection, &Connection::fetchFailed,
+            this, &HostDialog::onFetchFailed);
 }
 
 void HostDialog::setupUI()
@@ -238,9 +246,9 @@ void HostDialog::updateInfo()
         return;
     }
 
-    // Get hostname
-    QString hostname = m_connection->hostname();
-    m_hostnameLabel->setText(hostname.isEmpty() ? "Unknown" : hostname);
+    // Use cached values for immediate display (may be stale on first open)
+    QString hostname = m_connection->cachedHostname();
+    m_hostnameLabel->setText(hostname.isEmpty() ? "Fetching..." : hostname);
 
     // Get hypervisor type from URI
     QString uri = m_connection->uri();
@@ -256,17 +264,20 @@ void HostDialog::updateInfo()
     }
     m_hypervisorLabel->setText(hypervisor);
 
-    // Get libvirt version
-    m_versionLabel->setText(m_connection->libvirtVersion());
+    // Use cached version
+    QString version = m_connection->cachedLibvirtVersion();
+    m_versionLabel->setText(version.isEmpty() ? "Fetching..." : version);
 
-    // Get capabilities XML
-    QString capsXml = m_connection->capabilities();
+    // Use cached capabilities
+    QString capsXml = m_connection->cachedCapabilities();
     if (capsXml.isEmpty()) {
         m_archLabel->setText("N/A");
         m_cpusLabel->setText("N/A");
         m_memoryLabel->setText("N/A");
-        m_capsLabel->setText("Unable to retrieve capabilities");
+        m_capsLabel->setText("Fetching capabilities...");
         m_xmlCaps->setPlainText("");
+        // Trigger async fetch
+        m_connection->fetchConnectionInfoAsync();
         return;
     }
 
@@ -412,21 +423,9 @@ void HostDialog::updatePerformance()
         return;
     }
 
-    // Get host CPU usage (needs two calls with time between them)
-    // First call to establish baseline
-    m_connection->getHostCPUUsage();
-    // Small delay for CPU stats calculation (will be calculated on next call)
-    // For now, just show the cached value
-    int cpuUsage = m_connection->getHostCPUUsage();
-    m_cpuUsageBar->setValue(cpuUsage);
-    m_cpuUsageLabel->setText(QString("%1%").arg(cpuUsage));
-
-    // Get host memory usage
-    unsigned long long memTotal = m_connection->getHostMemoryTotal();
-    unsigned long long memUsed = m_connection->getHostMemoryUsed();
-    int memPercentage = (memTotal > 0) ? ((memUsed * 100) / memTotal) : 0;
-    m_memoryUsageBar->setValue(memPercentage);
-    m_memoryUsageLabel->setText(QString("%1%").arg(memPercentage));
+    // Trigger async host stats fetch
+    m_connection->fetchHostStatsAsync();
+    // Note: The actual values will be updated via the hostStatsFetched signal
 
     // Get VM counts (use cached data, don't refresh to avoid race conditions)
     QList<Domain*> domains = m_connection->domains();
@@ -488,6 +487,56 @@ void HostDialog::updateDevices()
 void HostDialog::onRefresh()
 {
     refresh();
+}
+
+void HostDialog::onConnectionInfoFetched(const QString &hostname, const QString &capabilities,
+                                          const QString &version)
+{
+    // Update hostname
+    if (!hostname.isEmpty()) {
+        m_hostnameLabel->setText(hostname.isEmpty() ? "Unknown" : hostname);
+    }
+
+    // Update version
+    if (!version.isEmpty()) {
+        m_versionLabel->setText(version);
+    }
+
+    // Update capabilities
+    if (!capabilities.isEmpty()) {
+        // Re-run updateInfo to parse the capabilities XML
+        updateInfo();
+    }
+}
+
+void HostDialog::onHostStatsFetched(int cpuUsage, unsigned long long memoryTotal,
+                                     unsigned long long memoryUsed)
+{
+    // Update CPU usage
+    m_cpuUsageBar->setValue(cpuUsage);
+    m_cpuUsageLabel->setText(QString("%1%").arg(cpuUsage));
+
+    // Update memory usage
+    if (memoryTotal > 0) {
+        int memPercentage = static_cast<int>((memoryUsed * 100) / memoryTotal);
+        m_memoryUsageBar->setValue(memPercentage);
+        m_memoryUsageLabel->setText(QString("%1%").arg(memPercentage));
+    }
+}
+
+void HostDialog::onFetchFailed(const QString &error)
+{
+    qWarning() << "Failed to fetch host info:" << error;
+    // Show error in relevant labels
+    if (m_hostnameLabel->text() == "Fetching...") {
+        m_hostnameLabel->setText("Failed");
+    }
+    if (m_versionLabel->text() == "Fetching...") {
+        m_versionLabel->setText("Failed");
+    }
+    if (m_capsLabel->text() == "Fetching capabilities...") {
+        m_capsLabel->setText("Failed to load capabilities");
+    }
 }
 
 } // namespace QVirt

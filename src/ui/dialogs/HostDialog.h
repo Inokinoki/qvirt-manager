@@ -44,6 +44,11 @@ public:
 
 private slots:
     void onRefresh();
+    void onConnectionInfoFetched(const QString &hostname, const QString &capabilities,
+                                  const QString &version);
+    void onHostStatsFetched(int cpuUsage, unsigned long long memoryTotal,
+                             unsigned long long memoryUsed);
+    void onFetchFailed(const QString &error);
 
 private:
     void setupUI();

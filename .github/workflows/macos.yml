@@ -58,7 +58,9 @@ jobs:
     - name: Run Tests
       run: |
         cd build
-        QT_QPA_PLATFORM=offscreen ctest --output-on-failure || true
+        echo '=== Running CTest ==='
+        QT_QPA_PLATFORM=offscreen ctest --output-on-failure --verbose || true
+        echo '=== CTest Complete ==='
 
     - name: Install
       run: cmake --install build --config Release

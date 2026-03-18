@@ -75,6 +75,9 @@ public:
     bool undefine();
     void updateInfo();
 
+    // Get XML description (cached to avoid repeated remote calls)
+    QString getXMLDesc(unsigned int flags = 0);
+
 signals:
     void stateChanged();
 
@@ -97,6 +100,10 @@ private:
     QString m_dhcpStart;
     QString m_dhcpEnd;
     bool m_dhcpEnabled;
+
+    // Cached XML to avoid repeated remote calls
+    mutable QString m_cachedXmlDesc;
+    mutable bool m_xmlFetched = false;
 
     friend class Connection;
 };

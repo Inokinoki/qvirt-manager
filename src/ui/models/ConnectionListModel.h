@@ -73,6 +73,7 @@ public:
     void onConnectionStateChanged(Connection::State state);
     void onDomainAdded(QVirt::Domain *domain);
     void onDomainRemoved(QVirt::Domain *domain);
+    void onHostnameFetched(const QString &hostname);
 
 private:
     QList<Connection*> m_connections;

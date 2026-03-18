@@ -122,15 +122,30 @@ public:
     QList<NodeDevice *> nodeDevices() const;
     NodeDevice *getNodeDevice(const QString &name);
 
-    // Connection info
+    // Connection info (synchronous - may block)
     QString hostname() const;
     QString capabilities() const;
     QString libvirtVersion() const;
 
-    // Host statistics
+    // Cached connection info (non-blocking, may be stale)
+    QString cachedHostname() const { return m_cachedHostname; }
+    QString cachedCapabilities() const { return m_cachedCapabilities; }
+    QString cachedLibvirtVersion() const { return m_cachedLibvirtVersion; }
+    bool isConnectionInfoFetched() const { return m_hostnameFetched && m_capabilitiesFetched && m_libvirtVersionFetched; }
+
+    // Connection info (asynchronous - non-blocking)
+    void fetchHostnameAsync();
+    void fetchCapabilitiesAsync();
+    void fetchLibvirtVersionAsync();
+    void fetchConnectionInfoAsync();  // Fetches all three at once
+
+    // Host statistics (synchronous - may block)
     int getHostCPUUsage();  // Returns percentage 0-100
     unsigned long long getHostMemoryTotal();  // In KB
     unsigned long long getHostMemoryUsed();   // In KB
+
+    // Host statistics (asynchronous - non-blocking)
+    void fetchHostStatsAsync();  // Fetches CPU and memory stats
 
     // Polling control
     bool isPollingEnabled() const { return m_pollingEnabled; }
@@ -155,6 +170,16 @@ signals:
     void networkRemoved(Network *network);
     void storagePoolAdded(StoragePool *pool);
     void storagePoolRemoved(StoragePool *pool);
+    void nodeDeviceAdded(NodeDevice *device);
+    void nodeDeviceRemoved(NodeDevice *device);
+
+    // Async operation completion signals
+    void hostnameFetched(const QString &hostname);
+    void capabilitiesFetched(const QString &capabilities);
+    void libvirtVersionFetched(const QString &version);
+    void connectionInfoFetched(const QString &hostname, const QString &capabilities, const QString &version);
+    void hostStatsFetched(int cpuUsage, unsigned long long memoryTotal, unsigned long long memoryUsed);
+    void fetchFailed(const QString &error);
 
  public slots:
      void tick();
@@ -170,6 +195,7 @@ signals:
     void pollDomains();
     void pollNetworks();
     void pollStoragePools();
+    void pollNodeDevices();
 
     // Make m_conn accessible to Domain for XML operations
     friend class Domain;
@@ -200,6 +226,14 @@ signals:
     unsigned long long m_lastCPUTime;
     unsigned long long m_lastIdleTime;
     int m_lastCPUUsage;
+
+    // Cached connection info
+    QString m_cachedHostname;
+    QString m_cachedCapabilities;
+    QString m_cachedLibvirtVersion;
+    bool m_hostnameFetched;
+    bool m_capabilitiesFetched;
+    bool m_libvirtVersionFetched;
 };
 
 } // namespace QVirt

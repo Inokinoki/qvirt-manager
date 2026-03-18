@@ -64,8 +64,13 @@ StorageVolume::StorageVolume(virStorageVol *vol, StoragePool *pool, QObject *par
     // Get and parse XML description
     char *xml = virStorageVolGetXMLDesc(m_volume, 0);
     if (xml) {
-        parseXML(QString::fromUtf8(xml));
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
         free(xml);
+
+        // Cache the XML for future getXMLDesc() calls
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
     }
 }
 
@@ -312,14 +317,23 @@ QString StorageVolume::getXMLDesc(unsigned int flags)
         return QString();
     }
 
-    char *xml = virStorageVolGetXMLDesc(m_volume, flags);
-    if (xml) {
-        QString result = QString::fromUtf8(xml);
-        free(xml);
-        return result;
+    // Return cached XML if already fetched (avoid repeated remote calls)
+    if (m_xmlFetched && !m_cachedXmlDesc.isEmpty()) {
+        return m_cachedXmlDesc;
     }
 
-    return QString();
+    char *xml = virStorageVolGetXMLDesc(m_volume, flags);
+    if (!xml) {
+        return QString();
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    // Cache the XML for future calls
+    m_cachedXmlDesc = xmlStr;
+    m_xmlFetched = true;
+    return xmlStr;
 }
 
 void StorageVolume::updateInfo()
@@ -331,8 +345,13 @@ void StorageVolume::updateInfo()
     // Refresh volume info by re-parsing XML
     char *xml = virStorageVolGetXMLDesc(m_volume, 0);
     if (xml) {
-        parseXML(QString::fromUtf8(xml));
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
         free(xml);
+
+        // Update cached XML
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
     }
 }
 

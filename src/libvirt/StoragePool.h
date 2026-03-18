@@ -84,7 +84,11 @@ public:
     bool start();
     bool stop();
     bool refresh();
+    void updateInfo();
     bool undefine();
+
+    // Get XML description (cached to avoid repeated remote calls)
+    QString getXMLDesc(unsigned int flags = 0);
 
 signals:
     void stateChanged();
@@ -104,6 +108,10 @@ private:
     quint64 m_capacity;
     quint64 m_allocation;
     quint64 m_available;
+
+    // Cached XML to avoid repeated remote calls
+    mutable QString m_cachedXmlDesc;
+    mutable bool m_xmlFetched = false;
 
     void parseXML(const QString &xml);
 

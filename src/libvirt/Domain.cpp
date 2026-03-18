@@ -16,6 +16,9 @@
 #include "../core/Error.h"
 #include <QDebug>
 #include <QDomDocument>
+#include <QDateTime>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
 #include <cstring>
 
 namespace QVirt {
@@ -33,6 +36,7 @@ Domain::Domain(Connection *conn, virDomainPtr domain)
     , m_prevCpuTime(0)
     , m_prevCpuTimestamp(0)
     , m_cachedCpuUsage(0.0f)
+    , m_xmlFetched(false)
 {
     // Only call libvirt functions if we have a valid virDomainPtr
     // For cached domains (m_domain == nullptr), values will be set by fromCacheInfo()
@@ -57,8 +61,8 @@ Domain::Domain(Connection *conn, virDomainPtr domain)
             m_id = "-";
         }
 
-        // Initialize with current info
-        updateInfo();
+        // Initialize with current info - minimal, no XML
+        updateInfoMinimal();
 
         qDebug() << "Created Domain wrapper for" << m_name << "(" << m_uuid << ")";
     }
@@ -111,31 +115,66 @@ void Domain::updateInfo()
         m_maxVcpuCount = m_vcpuCount;  // Fallback to current count
     }
 
-    // Get XML description for additional info
-    char *xml = virDomainGetXMLDesc(m_domain, 0);
-    if (xml) {
-        QString xmlStr = QString::fromUtf8(xml);
-        free(xml);
+    // Get XML description for additional info (only if not already fetched)
+    if (!m_xmlFetched) {
+        char *xml = virDomainGetXMLDesc(m_domain, 0);
+        if (xml) {
+            QString xmlStr = QString::fromUtf8(xml);
+            free(xml);
 
-        // Parse description and title from XML
-        QDomDocument doc;
-        if (doc.setContent(xmlStr)) {
-            QDomElement root = doc.documentElement();
-            if (root.tagName() == "domain") {
-                // Parse description
-                QDomNodeList descNodes = root.elementsByTagName("description");
-                if (!descNodes.isEmpty()) {
-                    m_description = descNodes.at(0).toElement().text();
-                }
+            // Parse description and title from XML
+            QDomDocument doc;
+            if (doc.setContent(xmlStr)) {
+                QDomElement root = doc.documentElement();
+                if (root.tagName() == "domain") {
+                    // Parse description
+                    QDomNodeList descNodes = root.elementsByTagName("description");
+                    if (!descNodes.isEmpty()) {
+                        m_description = descNodes.at(0).toElement().text();
+                    }
 
-                // Parse title
-                QDomNodeList titleNodes = root.elementsByTagName("title");
-                if (!titleNodes.isEmpty()) {
-                    m_title = titleNodes.at(0).toElement().text();
+                    // Parse title
+                    QDomNodeList titleNodes = root.elementsByTagName("title");
+                    if (!titleNodes.isEmpty()) {
+                        m_title = titleNodes.at(0).toElement().text();
+                    }
                 }
             }
+            m_xmlFetched = true;
         }
     }
+
+    emit statsUpdated();
+}
+
+void Domain::updateInfoMinimal()
+{
+    if (!m_domain) {
+        return;
+    }
+
+    // Get domain info only - no XML
+    virDomainInfo info;
+    int ret = virDomainGetInfo(m_domain, &info);
+    if (ret < 0) {
+        qWarning() << "Failed to get domain info for" << m_name << "- domain may be inaccessible";
+        return;
+    }
+
+    // Update state
+    State newState = static_cast<State>(info.state);
+    if (newState != m_state) {
+        setState(newState);
+    }
+
+    // Update cached values
+    m_maxMemory = info.maxMem;
+    m_currentMemory = info.memory;
+    m_vcpuCount = info.nrVirtCpu;
+    m_cpuTime = info.cpuTime;
+
+    // Skip vcpu flags and XML - these are expensive
+    m_maxVcpuCount = m_vcpuCount;
 
     emit statsUpdated();
 }
@@ -254,6 +293,11 @@ QString Domain::getXMLDesc(unsigned int flags) const
         return m_cachedXmlDesc;
     }
 
+    // Return cached XML if already fetched (avoid repeated remote calls)
+    if (m_xmlFetched && !m_cachedXmlDesc.isEmpty()) {
+        return m_cachedXmlDesc;
+    }
+
     char *xml = virDomainGetXMLDesc(m_domain, flags);
     if (!xml) {
         return QString();
@@ -261,6 +305,10 @@ QString Domain::getXMLDesc(unsigned int flags) const
 
     QString xmlStr = QString::fromUtf8(xml);
     free(xml);
+
+    // Cache the XML for future calls
+    const_cast<Domain*>(this)->m_cachedXmlDesc = xmlStr;
+    const_cast<Domain*>(this)->m_xmlFetched = true;
     return xmlStr;
 }
 
@@ -453,14 +501,11 @@ float Domain::diskUsage() const
         return 0.0f;
     }
 
-    // Get domain XML to find disk devices
-    char *xml = virDomainGetXMLDesc(m_domain, 0);
-    if (!xml) {
+    // Get domain XML to find disk devices (uses cached XML if available)
+    QString xmlStr = getXMLDesc(0);
+    if (xmlStr.isEmpty()) {
         return 0.0f;
     }
-
-    QString xmlStr = QString::fromUtf8(xml);
-    free(xml);
 
     QDomDocument doc;
     if (!doc.setContent(xmlStr)) {
@@ -525,14 +570,11 @@ float Domain::networkUsage() const
         return 0.0f;
     }
 
-    // Get domain XML to find network interfaces
-    char *xml = virDomainGetXMLDesc(m_domain, 0);
-    if (!xml) {
+    // Get domain XML to find network interfaces (uses cached XML if available)
+    QString xmlStr = getXMLDesc(0);
+    if (xmlStr.isEmpty()) {
         return 0.0f;
     }
-
-    QString xmlStr = QString::fromUtf8(xml);
-    free(xml);
 
     QDomDocument doc;
     if (!doc.setContent(xmlStr)) {
@@ -854,6 +896,101 @@ Domain *Domain::fromCacheInfo(Connection *conn, const CacheInfo &info)
     }
 
     return domain;
+}
+
+// Async domain info update
+void Domain::updateInfoAsync()
+{
+    updateInfoAsync(true);  // Default to fetching XML
+}
+
+void Domain::updateInfoAsync(bool fetchXml)
+{
+    if (!m_domain) {
+        return;
+    }
+
+    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        bool success = watcher->result();
+        if (success) {
+            emit infoUpdated();
+        } else {
+            emit infoUpdateFailed();
+        }
+        watcher->deleteLater();
+    });
+    connect(watcher, &QFutureWatcher<bool>::canceled, this, [this, watcher]() {
+        emit infoUpdateFailed();
+        watcher->deleteLater();
+    });
+
+    QFuture<bool> future = QtConcurrent::run([this, fetchXml]() -> bool {
+        if (!m_domain) {
+            return false;
+        }
+
+        // Get domain info
+        virDomainInfo info;
+        int ret = virDomainGetInfo(m_domain, &info);
+        if (ret < 0) {
+            return false;
+        }
+
+        // Update state
+        State newState = static_cast<State>(info.state);
+        if (newState != m_state) {
+            setState(newState);
+        }
+
+        // Update cached values
+        m_maxMemory = info.maxMem;
+        m_currentMemory = info.memory;
+        m_vcpuCount = info.nrVirtCpu;
+        m_cpuTime = info.cpuTime;
+
+        // Get max vcpu count
+        int maxVcpu = virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
+        if (maxVcpu > 0) {
+            m_maxVcpuCount = maxVcpu;
+        } else {
+            m_maxVcpuCount = m_vcpuCount;
+        }
+
+        // Optionally fetch XML description
+        if (fetchXml && !m_xmlFetched) {
+            char *xml = virDomainGetXMLDesc(m_domain, 0);
+            if (xml) {
+                QString xmlStr = QString::fromUtf8(xml);
+                free(xml);
+
+                // Parse description and title from XML
+                QDomDocument doc;
+                if (doc.setContent(xmlStr)) {
+                    QDomElement root = doc.documentElement();
+                    if (root.tagName() == "domain") {
+                        // Parse description
+                        QDomNodeList descNodes = root.elementsByTagName("description");
+                        if (!descNodes.isEmpty()) {
+                            m_description = descNodes.at(0).toElement().text();
+                        }
+
+                        // Parse title
+                        QDomNodeList titleNodes = root.elementsByTagName("title");
+                        if (!titleNodes.isEmpty()) {
+                            m_title = titleNodes.at(0).toElement().text();
+                        }
+                    }
+                }
+                m_xmlFetched = true;
+            }
+        }
+
+        emit statsUpdated();
+        return true;
+    });
+
+    watcher->setFuture(future);
 }
 
 } // namespace QVirt

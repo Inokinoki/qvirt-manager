@@ -44,8 +44,13 @@ Network::Network(Connection *conn, virNetworkPtr network)
     // Get and parse XML to determine forward mode and configuration
     char *xml = virNetworkGetXMLDesc(m_network, 0);
     if (xml) {
-        parseXML(QString::fromUtf8(xml));
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
         free(xml);
+
+        // Cache the XML for future use
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
     }
 
     qDebug().noquote() << "Created Network wrapper for" << m_name;
@@ -102,6 +107,31 @@ bool Network::undefine()
     return true;
 }
 
+QString Network::getXMLDesc(unsigned int flags)
+{
+    if (!m_network) {
+        return QString();
+    }
+
+    // Return cached XML if already fetched (avoid repeated remote calls)
+    if (m_xmlFetched && !m_cachedXmlDesc.isEmpty()) {
+        return m_cachedXmlDesc;
+    }
+
+    char *xml = virNetworkGetXMLDesc(m_network, flags);
+    if (!xml) {
+        return QString();
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    // Cache the XML for future calls
+    m_cachedXmlDesc = xmlStr;
+    m_xmlFetched = true;
+    return xmlStr;
+}
+
 void Network::updateInfo()
 {
     if (!m_network) {
@@ -118,8 +148,13 @@ void Network::updateInfo()
 
     char *xml = virNetworkGetXMLDesc(m_network, 0);
     if (xml) {
-        parseXML(QString::fromUtf8(xml));
+        QString xmlStr = QString::fromUtf8(xml);
+        parseXML(xmlStr);
         free(xml);
+
+        // Update cached XML
+        m_cachedXmlDesc = xmlStr;
+        m_xmlFetched = true;
     }
 }
 

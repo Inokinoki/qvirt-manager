@@ -69,24 +69,22 @@ ManagerWindow::ManagerWindow(QWidget *parent)
             QString sshKeyPath = config->connSSHKeyPath(uri);
             QString sshUsername = config->connSSHUsername(uri);
 
+            // Create connection object and show progress dialog
+            auto *newConn = Connection::create(uri);
+            connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
+
+            // Create progress dialog for auto-connect
+            m_progressDialog = new ConnectionProgressDialog(this);
+            m_progressDialog->show();
+            connect(newConn, &Connection::connectionProgress, m_progressDialog, &ConnectionProgressDialog::updateStatus);
+
+            // Temporarily store the connection until connection completes
+            m_connectingConnections[uri] = newConn;
+
+            // Start async connection with saved SSH credentials
             // Note: We don't save passwords for security (user would need to re-enter)
             // In production, use QtKeychain or similar for secure password storage
-            Connection *conn = Connection::open(uri, sshKeyPath, QString());
-
-            if (conn) {
-                addConnection(conn);
-            } else {
-                // Connection failed - create a failed connection object to show cached VMs
-                conn = Connection::create(uri);
-                conn->loadVMCache();
-                m_treeModel->addConnection(conn);
-
-                // Auto-expand the connection to show cached VMs
-                QModelIndex connIndex = m_treeModel->connectionIndex(conn);
-                if (connIndex.isValid()) {
-                    m_treeView->expand(connIndex);
-                }
-            }
+            newConn->openAsync(sshKeyPath, QString());
         } else {
             // Autoconnect is disabled - add as disconnected entry with cached VMs
             // User can manually connect later if desired
@@ -637,19 +635,20 @@ void ManagerWindow::openConnectionDialog()
     if (dialog.exec() == QDialog::Accepted) {
         QString uri = dialog.uri();
         if (!uri.isEmpty()) {
-            // Pass SSH credentials if provided
-            Connection *conn = Connection::open(uri, dialog.sshKeyPath(), dialog.sshPassword());
-            if (conn) {
-                addConnection(conn);
+            // Create and show progress dialog
+            m_progressDialog = new ConnectionProgressDialog(this);
+            m_progressDialog->show();
 
-                // Save to config (credentials are automatically persisted in addConnection)
-                Config *config = Config::instance();
-                config->addConnectionURI(uri);
-                config->setConnAutoconnect(uri, dialog.autoconnect());
-            } else {
-                QMessageBox::critical(this, tr("Connection Failed"),
-                                     tr("Failed to connect to: %1").arg(uri));
-            }
+            // Create connection object (not yet connected)
+            auto *newConn = Connection::create(uri);
+            connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
+            connect(newConn, &Connection::connectionProgress, m_progressDialog, &ConnectionProgressDialog::updateStatus);
+
+            // Temporarily store the connection until connection completes
+            m_connectingConnections[uri] = newConn;
+
+            // Start async connection with SSH credentials
+            newConn->openAsync(dialog.sshKeyPath(), dialog.sshPassword());
         }
     }
 }
@@ -940,7 +939,7 @@ void ManagerWindow::onEditConnection()
         config->setConnSSHUsername(uri, sshUsername);
 
         Connection *conn = item->connection();
-        
+
         // If connection is active, reconnect to apply new settings
         if (conn) {
             // IMPORTANT: Don't use removeConnection() here as it will add back as disconnected
@@ -952,16 +951,25 @@ void ManagerWindow::onEditConnection()
             // Remove from models
             m_treeModel->removeConnection(conn);
 
-            // Open new connection with updated credentials
-            Connection *newConn = Connection::open(uri, sshKeyPath, QString());
-            if (newConn) {
-                addConnection(newConn);
-                m_statusLabel->setText(tr("Connection '%1' updated and reconnected").arg(uri));
-            } else {
-                // If connection failed, add back as disconnected
-                m_treeModel->addDisconnectedConnection(uri, config->connAutoconnect(uri));
-                m_statusLabel->setText(tr("Connection '%1' updated but failed to reconnect").arg(uri));
-            }
+            // Close old connection
+            delete conn;
+
+            // Create new connection object and show progress dialog
+            auto *newConn = Connection::create(uri);
+            connect(newConn, &Connection::stateChanged, this, &ManagerWindow::onConnectionStateChanged);
+
+            // Create progress dialog for reconnect
+            m_progressDialog = new ConnectionProgressDialog(this);
+            m_progressDialog->show();
+            connect(newConn, &Connection::connectionProgress, m_progressDialog, &ConnectionProgressDialog::updateStatus);
+
+            // Temporarily store the connection until connection completes
+            m_connectingConnections[uri] = newConn;
+
+            // Start async connection with updated credentials
+            newConn->openAsync(sshKeyPath, QString());
+
+            m_statusLabel->setText(tr("Connection '%1' updating...").arg(uri));
         } else {
             m_statusLabel->setText(tr("Connection '%1' updated").arg(uri));
         }

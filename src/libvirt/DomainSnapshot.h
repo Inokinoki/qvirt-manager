@@ -82,6 +82,10 @@ private:
     virDomainState m_state;
     QDateTime m_creationTime;
 
+    // Cached XML to avoid repeated remote calls
+    mutable QString m_cachedXmlDesc;
+    mutable bool m_xmlFetched = false;
+
     void parseXML(const QString &xml);
 };
 

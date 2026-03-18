@@ -120,7 +120,9 @@ void TestConnectionLifecycle::testListDomains()
     QList<Domain*> domains = conn->domains();
 
     // Should get a valid list (even if empty)
-    QVERIFY(domains != conn->domains());
+    // Note: domains() returns values from internal cache, so calling it twice
+    // should return the same list
+    QCOMPARE(domains, conn->domains());
 
     // Cleanup domains
     for (Domain *domain : domains) {

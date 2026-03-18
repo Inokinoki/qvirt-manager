@@ -75,6 +75,9 @@ public:
     bool undefine();
     void updateInfo();
 
+    // Get XML description (cached to avoid repeated remote calls)
+    QString getXMLDesc(unsigned int flags = 0);
+
 signals:
     void stateChanged();
 

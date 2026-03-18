@@ -187,6 +187,31 @@ bool StoragePool::undefine()
     return true;
 }
 
+QString StoragePool::getXMLDesc(unsigned int flags)
+{
+    if (!m_pool) {
+        return QString();
+    }
+
+    // Return cached XML if already fetched (avoid repeated remote calls)
+    if (m_xmlFetched && !m_cachedXmlDesc.isEmpty()) {
+        return m_cachedXmlDesc;
+    }
+
+    char *xml = virStoragePoolGetXMLDesc(m_pool, flags);
+    if (!xml) {
+        return QString();
+    }
+
+    QString xmlStr = QString::fromUtf8(xml);
+    free(xml);
+
+    // Cache the XML for future calls
+    m_cachedXmlDesc = xmlStr;
+    m_xmlFetched = true;
+    return xmlStr;
+}
+
 QList<StorageVolume*> StoragePool::volumes()
 {
     QList<StorageVolume*> volumeList;

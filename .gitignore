@@ -64,7 +64,3 @@ packaging/**/*.rpm
 packaging/**/*.tar.gz
 packaging/debian/debian/
 packaging/qvirt-manager.spec
-
-# Test files
-tests/CMakeLists.txt
-tests/**/*.cpp

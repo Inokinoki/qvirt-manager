@@ -45,6 +45,7 @@ endif()
 if(LIBVIRT_FOUND)
     add_library(qvirt-libvirt
         libvirt/Connection.cpp
+        libvirt/ConnectionWorker.cpp
         libvirt/Domain.cpp
         libvirt/DomainSnapshot.cpp
         libvirt/DomainCheckpoint.cpp

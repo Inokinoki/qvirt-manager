@@ -169,6 +169,11 @@ void OverviewPage::setupUI()
     connect(m_graphUpdateTimer, &QTimer::timeout, this, &OverviewPage::refreshPerformanceGraphs);
     m_graphUpdateTimer->start(2000);
 
+    // Connect to domain stats signal for immediate UI updates
+    if (m_domain) {
+        connect(m_domain, &Domain::statsUpdated, this, &OverviewPage::updateStats);
+    }
+
     // Add stretch to push everything to the top
     mainLayout->addStretch();
 }

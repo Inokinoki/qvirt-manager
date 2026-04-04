@@ -21,6 +21,7 @@
 #include <QAbstractButton>
 #include <QLabel>
 #include <QStackedWidget>
+#include <QTemporaryFile>
 #include "../../src/ui/wizards/CreateVMWizard.h"
 #include "../../src/libvirt/Connection.h"
 
@@ -157,6 +158,8 @@ void TestCreateVMWizard::testWizardCreation()
     }
 
     m_wizard = new CreateVMWizard(m_connection);
+    m_wizard->show();
+    QTest::qWait(50);
     QVERIFY(m_wizard != nullptr);
     QVERIFY(!m_wizard->windowTitle().isEmpty());
     QVERIFY(m_wizard->isVisible());
@@ -187,8 +190,9 @@ void TestCreateVMWizard::testWizardPagesExist()
     }
 
     m_wizard = new CreateVMWizard(m_connection);
+    m_wizard->show();
+    QTest::qWait(50);
 
-    // Navigate through pages and verify each exists
     QVERIFY(m_wizard->currentPage() != nullptr);
 
     // Click Next to go through pages
@@ -812,6 +816,22 @@ void TestCreateVMWizard::testPageTransitions()
     }
 
     m_wizard = new CreateVMWizard(m_connection);
+    m_wizard->show();
+    QTest::qWait(50);
+
+    // Set a name on the first page so Next becomes enabled
+    QLineEdit* nameEdit = m_wizard->findChild<QLineEdit*>();
+    if (nameEdit) {
+        nameEdit->setText("test-page-vm");
+    }
+    QTest::qWait(50);
+
+    // Create a fake ISO file for the install media page
+    QTemporaryFile fakeIso;
+    if (fakeIso.open()) {
+        fakeIso.write("fake-iso-content");
+        fakeIso.close();
+    }
 
     QAbstractButton* nextButton = m_wizard->button(QWizard::NextButton);
     QAbstractButton* backButton = m_wizard->button(QWizard::BackButton);
@@ -821,11 +841,29 @@ void TestCreateVMWizard::testPageTransitions()
 
     // Navigate forward through all pages
     int maxPageId = -1;
-    while (m_wizard->currentId() != -1 && maxPageId < 10) { // Safety limit
+    int staleCount = 0;
+    while (m_wizard->currentId() != -1 && staleCount < 3) {
         maxPageId = qMax(maxPageId, m_wizard->currentId());
         if (nextButton->isEnabled()) {
+            int beforeId = m_wizard->currentId();
             nextButton->click();
             QTest::qWait(50);
+            // If we just landed on install media page, set the ISO path
+            if (m_wizard->currentId() == 1 && fakeIso.fileName().isEmpty() == false) {
+                QList<QLineEdit*> edits = m_wizard->findChildren<QLineEdit*>();
+                for (QLineEdit* edit : edits) {
+                    if (edit->isVisible() && edit != nameEdit) {
+                        edit->setText(fakeIso.fileName());
+                        break;
+                    }
+                }
+                QTest::qWait(50);
+            }
+            if (m_wizard->currentId() == beforeId) {
+                staleCount++;
+            } else {
+                staleCount = 0;
+            }
         } else {
             break;
         }
@@ -851,26 +889,50 @@ void TestCreateVMWizard::testWizardCompletion()
     }
 
     m_wizard = new CreateVMWizard(m_connection);
+    m_wizard->show();
+    QTest::qWait(50);
 
-    // Fill in minimal required fields
     QLineEdit* nameEdit = m_wizard->findChild<QLineEdit*>();
     if (nameEdit) {
         nameEdit->setText("test-complete-vm");
     }
+    QTest::qWait(50);
 
-    // Navigate to finish
+    QTemporaryFile fakeIso;
+    if (fakeIso.open()) {
+        fakeIso.write("fake-iso-content");
+        fakeIso.close();
+    }
+
     QAbstractButton* nextButton = m_wizard->button(QWizard::NextButton);
     QVERIFY(nextButton != nullptr);
 
-    // Navigate through pages
     int iterations = 0;
-    while (iterations < 10 && nextButton->isEnabled() && m_wizard->currentId() != -1) {
+    int staleCount = 0;
+    while (iterations < 10 && nextButton->isEnabled() && m_wizard->currentId() != -1 && staleCount < 3) {
+        int beforeId = m_wizard->currentId();
         nextButton->click();
         QTest::qWait(50);
         iterations++;
+
+        if (m_wizard->currentId() == 1 && fakeIso.fileName().isEmpty() == false) {
+            QList<QLineEdit*> edits = m_wizard->findChildren<QLineEdit*>();
+            for (QLineEdit* edit : edits) {
+                if (edit->isVisible() && edit != nameEdit) {
+                    edit->setText(fakeIso.fileName());
+                    break;
+                }
+            }
+            QTest::qWait(50);
+        }
+
+        if (m_wizard->currentId() == beforeId) {
+            staleCount++;
+        } else {
+            staleCount = 0;
+        }
     }
 
-    // Wizard should either complete or reach a validation point
     QVERIFY(iterations > 0);
 
     delete m_wizard;

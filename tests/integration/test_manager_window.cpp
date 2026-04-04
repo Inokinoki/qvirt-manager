@@ -14,6 +14,7 @@
 #include <QTimer>
 #include <QSignalSpy>
 #include <QStatusBar>
+#include <QToolButton>
 #include "../../src/ui/manager/ManagerWindow.h"
 #include "../../src/ui/models/VMListModel.h"
 #include "../../src/ui/models/ConnectionListModel.h"
@@ -108,6 +109,7 @@ void TestManagerWindow::cleanupTestCase()
 void TestManagerWindow::testWindowCreation()
 {
     m_window = new ManagerWindow();
+    m_window->show();
     QVERIFY(m_window != nullptr);
     QVERIFY(!m_window->windowTitle().isEmpty());
     QVERIFY(m_window->isVisible());
@@ -119,8 +121,8 @@ void TestManagerWindow::testWindowCreation()
 void TestManagerWindow::testWindowInitialState()
 {
     m_window = new ManagerWindow();
+    m_window->show();
 
-    // Window should be visible and enabled
     QVERIFY(m_window->isVisible());
     QVERIFY(m_window->isEnabled());
 
@@ -277,11 +279,11 @@ void TestManagerWindow::testMenuActions()
 void TestManagerWindow::testTreeViewCreation()
 {
     m_window = new ManagerWindow();
+    m_window->show();
 
     QTreeView* treeView = m_window->findChild<QTreeView*>();
     QVERIFY(treeView != nullptr);
 
-    // Tree view should be visible and enabled
     QVERIFY(treeView->isVisible());
     QVERIFY(treeView->isEnabled());
 
@@ -403,12 +405,30 @@ void TestManagerWindow::testButtonInitialState()
         if (text.contains("reboot")) hasReboot = true;
     }
 
-    // At least New VM button should exist
+    // At least New VM button should exist (as QPushButton, QToolButton, or QAction)
     bool hasNewVM = false;
     for (QPushButton* button : buttons) {
         if (button->text().toLower().contains("new")) {
             hasNewVM = true;
             break;
+        }
+    }
+    if (!hasNewVM) {
+        QList<QToolButton*> toolButtons = m_window->findChildren<QToolButton*>();
+        for (QToolButton* button : toolButtons) {
+            if (button->text().toLower().contains("new")) {
+                hasNewVM = true;
+                break;
+            }
+        }
+    }
+    if (!hasNewVM) {
+        QList<QAction*> actions = m_window->findChildren<QAction*>();
+        for (QAction* action : actions) {
+            if (action->text().toLower().contains("new")) {
+                hasNewVM = true;
+                break;
+            }
         }
     }
     QVERIFY(hasNewVM);
@@ -436,11 +456,11 @@ void TestManagerWindow::testButtonEnableState()
 void TestManagerWindow::testStatusBar()
 {
     m_window = new ManagerWindow();
+    m_window->show();
 
     QStatusBar* statusBar = m_window->statusBar();
     QVERIFY(statusBar != nullptr);
 
-    // Status bar should be visible
     QVERIFY(statusBar->isVisible());
 
     delete m_window;

@@ -14,6 +14,7 @@
 #include "Network.h"
 #include "StoragePool.h"
 #include "NodeDevice.h"
+#include "ConnectionWorker.h"
 #include "../core/Error.h"
 #include "../core/Config.h"
 #include <QDebug>
@@ -86,12 +87,12 @@ Connection::Connection(const QString &uri)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_workerThread(nullptr)
+    , m_worker(nullptr)
+    , m_workerBusy(false)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
-    , m_cachedHostname()
-    , m_cachedCapabilities()
-    , m_cachedLibvirtVersion()
     , m_hostnameFetched(false)
     , m_capabilitiesFetched(false)
     , m_libvirtVersionFetched(false)
@@ -118,13 +119,13 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_workerThread(nullptr)
+    , m_worker(nullptr)
+    , m_workerBusy(false)
     , m_sshKeyPath(sshKeyPath)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
-    , m_cachedHostname()
-    , m_cachedCapabilities()
-    , m_cachedLibvirtVersion()
     , m_hostnameFetched(false)
     , m_capabilitiesFetched(false)
     , m_libvirtVersionFetched(false)
@@ -244,12 +245,12 @@ Connection::Connection(const QString &uri, bool /* internal */)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_workerThread(nullptr)
+    , m_worker(nullptr)
+    , m_workerBusy(false)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
-    , m_cachedHostname()
-    , m_cachedCapabilities()
-    , m_cachedLibvirtVersion()
     , m_hostnameFetched(false)
     , m_capabilitiesFetched(false)
     , m_libvirtVersionFetched(false)
@@ -262,21 +263,17 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
     m_state = Connecting;
     emit stateChanged(m_state);
 
-    auto *watcher = new QFutureWatcher<bool>(this);
+    auto *watcher = new QFutureWatcher<virConnectPtr>(this);
 
-    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
-        bool success = watcher->result();
+    connect(watcher, &QFutureWatcher<virConnectPtr>::finished, this, [this, watcher]() {
+        virConnectPtr conn = watcher->result();
 
-        if (success) {
+        if (conn) {
+            m_conn = conn;
             m_state = Active;
             m_connectionError.clear();
             emit connectionProgress(tr("Connection established"));
             qDebug() << "Async connection to" << m_uri << "succeeded";
-
-            // Now open the connection and store the pointer
-#ifdef LIBVIRT_FOUND
-            m_conn = virConnectOpen(m_uri.toUtf8().constData());
-#endif
         } else {
             m_state = ConnectionFailed;
             if (m_connectionError.isEmpty()) {
@@ -289,35 +286,16 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
         watcher->deleteLater();
     });
 
-    QFuture<bool> future = QtConcurrent::run([this, sshKeyPath, password]() -> bool {
+    QFuture<virConnectPtr> future = QtConcurrent::run([this, sshKeyPath, password]() -> virConnectPtr {
 #ifdef LIBVIRT_FOUND
         virConnectPtr conn = nullptr;
 
-        // Extract hostname for status messages
-        QString hostname = m_uri;
-        if (hostname.contains("://")) {
-            hostname = hostname.split("://")[1];
-            if (hostname.contains("/")) {
-                hostname = hostname.split("/")[0];
-            }
-            if (hostname.contains("@")) {
-                hostname = hostname.split("@")[1];
-            }
-            if (hostname.contains(":")) {
-                hostname = hostname.split(":")[0];
-            }
-        }
-
         if (sshKeyPath.isEmpty() && password.isEmpty()) {
-            emit connectionProgress(tr("Connecting to %1...").arg(m_uri));
             conn = virConnectOpen(m_uri.toUtf8().constData());
         } else {
             ConnectionAuthData authData;
             authData.password = password;
             authData.sshKeyPath = sshKeyPath;
-
-            // Show SSH connection status
-            emit connectionProgress(tr("Connecting via SSH to %1...").arg(hostname));
 
             QByteArray originalLibvirtSsh;
             if (!sshKeyPath.isEmpty()) {
@@ -325,11 +303,9 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
                 QString sshCmd = QString("ssh -i \"%1\" -o IdentitiesOnly=yes -o BatchMode=no -o ConnectTimeout=10")
                     .arg(sshKeyPath);
                 qputenv("LIBVIRT_SSH", sshCmd.toUtf8());
-                emit connectionProgress(tr("Authenticating with SSH key..."));
             }
 
             authHelper.cbdata = &authData;
-            emit connectionProgress(tr("Connecting to libvirt..."));
             conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &authHelper, 0);
 
             if (!sshKeyPath.isEmpty()) {
@@ -341,20 +317,16 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
             }
         }
 
-        if (conn) {
-            // Store the connection pointer for later use
-            // Note: We don't close it here - it will be closed in Connection::close()
-            return true;
-        } else {
+        if (!conn) {
             virErrorPtr err = virGetLastError();
             if (err) {
                 m_connectionError = QString::fromUtf8(err->message);
             }
-            return false;
         }
+        return conn;
 #else
         m_connectionError = tr("libvirt not available");
-        return false;
+        return nullptr;
 #endif
     });
 
@@ -421,13 +393,11 @@ void Connection::refresh()
 void Connection::close()
 {
     if (!m_conn) {
-        return;  // Already closed
+        return;
     }
 
-    // Save VM cache before closing
     saveVMCache();
 
-    // Clean up cached objects
     for (auto *domain : m_domains) {
         delete domain;
     }
@@ -823,11 +793,11 @@ void Connection::tick()
         pollNodeDevices();
     }
 
-    // Update all domain stats - only if we have domains
-    if (!m_domains.isEmpty()) {
+    // Update domain stats at reduced frequency (every 4th tick)
+    if (m_tickCounter % 4 == 0 && !m_domains.isEmpty()) {
         for (auto *domain : m_domains) {
             if (domain) {
-                domain->updateInfoMinimal();  // Fast, no XML
+                domain->updateInfoMinimal();
             }
         }
     }
@@ -1886,6 +1856,77 @@ void Connection::fetchHostStatsAsync()
         });
 
     watcher->setFuture(future);
+}
+
+void Connection::startWorker()
+{
+    if (!m_conn || m_worker) {
+        return;
+    }
+
+    m_worker = new ConnectionWorker(m_conn);
+    m_workerThread = new QThread(this);
+    m_worker->moveToThread(m_workerThread);
+
+    connect(m_workerThread, &QThread::finished, m_worker, &QObject::deleteLater);
+    connect(m_worker, &ConnectionWorker::tickFinished, this, &Connection::onTickFinished, Qt::QueuedConnection);
+    connect(m_worker, &ConnectionWorker::connectionLost, this, &Connection::onConnectionLost, Qt::QueuedConnection);
+
+    m_workerThread->start();
+    qDebug() << "Background worker started for" << m_uri;
+}
+
+void Connection::onTickFinished(const PollResult &result)
+{
+    m_workerBusy = false;
+
+    if (!result.alive) {
+        return;
+    }
+
+    if (result.initialLoadDone) {
+        QSet<QString> staleNames;
+        for (auto it = m_domains.begin(); it != m_domains.end(); ++it) {
+            if (!result.currentDomainNames.contains(it.key())) {
+                staleNames.insert(it.key());
+            }
+        }
+        for (const QString &name : staleNames) {
+            Domain *domain = m_domains.take(name);
+            if (domain) {
+                emit domainRemoved(domain);
+                delete domain;
+            }
+        }
+    }
+
+    for (const DomainStats &ds : result.domainStats) {
+        Domain *domain = m_domains.value(ds.name, nullptr);
+        if (domain) {
+            domain->applyStats(ds.state, ds.maxMemory, ds.currentMemory,
+                               ds.vcpuCount, ds.cpuTime);
+        }
+    }
+
+    if (!m_domains.isEmpty()) {
+        QStringList names = m_domains.keys();
+        for (const QString &name : names) {
+            if (!result.currentDomainNames.contains(name)) {
+                Domain *domain = m_domains.take(name);
+                if (domain) {
+                    emit domainRemoved(domain);
+                    delete domain;
+                }
+            }
+        }
+    }
+}
+
+void Connection::onConnectionLost()
+{
+    m_workerBusy = false;
+    qDebug() << "Connection to" << m_uri << "lost (detected by worker)";
+    close();
 }
 
 } // namespace QVirt

@@ -89,6 +89,12 @@ public:
     bool shutdown();
     bool save(const QString &path);
 
+    // Async lifecycle operations (non-blocking)
+    void startAsync();
+    void shutdownAsync();
+    void destroyAsync();
+    void saveAsync(const QString &path);
+
     // Configuration
     QString getXMLDesc(unsigned int flags = 0) const;
     bool setXML(const QString &xml, unsigned int flags = 0);
@@ -98,24 +104,28 @@ public:
     bool detachDevice(const QString &xml);
     bool updateDevice(const QString &xml);
 
-    // Resources
-    quint64 maxMemory() const;  // in KB
-    quint64 memory() const;
-    int vcpuCount() const;
-    int maxVcpuCount() const;
+    // Resources (cached - never call libvirt)
+    quint64 maxMemory() const { return m_maxMemory; }
+    quint64 memory() const { return m_currentMemory; }
+    int vcpuCount() const { return m_vcpuCount; }
+    int maxVcpuCount() const { return m_maxVcpuCount; }
 
-    // Stats
-    quint64 cpuTime() const;
-    float cpuUsage();  // percentage (non-const to allow caching)
-    quint64 currentMemory() const;
-    float diskUsage() const;  // percentage
-    float networkUsage() const;  // percentage
+    // Stats (cached - never call libvirt)
+    quint64 cpuTime() const { return m_cpuTime; }
+    float cpuUsage() const { return m_cachedCpuUsage; }
+    quint64 currentMemory() const { return m_currentMemory; }
+    float diskUsage() const { return m_cachedDiskUsage; }
+    float networkUsage() const { return m_cachedNetworkUsage; }
 
     // Update cached info (synchronous - may block)
     void updateInfo();
 
     // Update cached info with minimal data (no XML, faster)
     void updateInfoMinimal();
+
+    // Apply pre-collected stats (no libvirt calls, main thread only)
+    void applyStats(int state, quint64 maxMemory, quint64 currentMemory,
+                    int vcpuCount, quint64 cpuTime);
 
     // Update cached info (asynchronous - non-blocking)
     void updateInfoAsync();
@@ -198,6 +208,7 @@ signals:
     // Async operation completion signals
     void infoUpdated();
     void infoUpdateFailed();
+    void lifecycleOperationFinished(const QString &operation, bool success);
 
 private:
     Domain(Connection *conn, virDomainPtr domain);
@@ -221,13 +232,17 @@ private:
     quint64 m_maxMemory;
     quint64 m_currentMemory;
     int m_vcpuCount;
-    int m_maxVcpuCount;
     quint64 m_cpuTime;
 
     // CPU usage calculation
     quint64 m_prevCpuTime;
     qint64 m_prevCpuTimestamp;
     float m_cachedCpuUsage;
+
+    // Cached stats
+    float m_cachedDiskUsage;
+    float m_cachedNetworkUsage;
+    int m_maxVcpuCount;
 
     // Track if XML has been fetched
     bool m_xmlFetched;

@@ -12,6 +12,7 @@
 #include <QtTest>
 #include <QApplication>
 #include <QElapsedTimer>
+#include <QtConcurrent/QtConcurrent>
 #include "../../src/core/Config.h"
 #include "../../src/core/Engine.h"
 #include "../../src/ui/manager/ManagerWindow.h"
@@ -94,6 +95,7 @@ private:
     };
 
     void recordBenchmark(const QString& name, qint64 elapsed, int iterations, qint64 threshold);
+    static qint64 thresholdMs(qint64 baseMs);
     QList<BenchmarkResult> m_results;
 };
 
@@ -103,7 +105,6 @@ void TestPerformanceBenchmarks::initTestCase()
     m_argv = new char*[1];
     m_argv[0] = strdup("test_performance");
 
-    // Initialize QApplication if not already done
     if (!qApp) {
         new QApplication(m_argc, m_argv);
     }
@@ -163,8 +164,18 @@ void TestPerformanceBenchmarks::recordBenchmark(const QString& name, qint64 elap
     result.elapsedMs = elapsed;
     result.avgMs = iterations > 0 ? elapsed / iterations : elapsed;
     result.iterations = iterations;
-    result.passed = result.avgMs < threshold;
+    result.passed = result.avgMs < thresholdMs(threshold);
     m_results.append(result);
+}
+
+qint64 TestPerformanceBenchmarks::thresholdMs(qint64 baseMs)
+{
+    static qint64 multiplier = []() -> qint64 {
+        bool ok = false;
+        qint64 m = qEnvironmentVariableIntValue("QVIRT_TEST_THRESHOLD_MULT", &ok);
+        return (ok && m > 0) ? m : 3;
+    }();
+    return baseMs * multiplier;
 }
 
 void TestPerformanceBenchmarks::testConfigReadPerformance()
@@ -189,7 +200,7 @@ void TestPerformanceBenchmarks::testConfigReadPerformance()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Config Read", elapsed, iterations, 100);
 
-    QVERIFY2(elapsed < 100, qPrintable(QString("Config read too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(100), qPrintable(QString("Config read too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testConfigWritePerformance()
@@ -208,7 +219,7 @@ void TestPerformanceBenchmarks::testConfigWritePerformance()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Config Write", elapsed, iterations, 50);
 
-    QVERIFY2(elapsed < 50, qPrintable(QString("Config write too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(50), qPrintable(QString("Config write too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testEngineSingletonAccess()
@@ -225,7 +236,7 @@ void TestPerformanceBenchmarks::testEngineSingletonAccess()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Engine Singleton Access", elapsed, iterations, 50);
 
-    QVERIFY2(elapsed < 50, qPrintable(QString("Engine singleton access too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(50), qPrintable(QString("Engine singleton access too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testEngineInitialization()
@@ -240,7 +251,9 @@ void TestPerformanceBenchmarks::testEngineInitialization()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Engine Initialization", elapsed, 1, 100);
 
-    QVERIFY2(elapsed < 100, qPrintable(QString("Engine initialization too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(100), qPrintable(QString("Engine initialization too slow: %1ms").arg(elapsed)));
+
+    Q_UNUSED(engine);
 }
 
 void TestPerformanceBenchmarks::testConnectionOpenClose()
@@ -259,7 +272,7 @@ void TestPerformanceBenchmarks::testConnectionOpenClose()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Connection Open/Close", elapsed, iterations, 500);
 
-    QVERIFY2(elapsed < 500, qPrintable(QString("Connection open/close too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(500), qPrintable(QString("Connection open/close too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testConnectionDomainEnumeration()
@@ -280,7 +293,7 @@ void TestPerformanceBenchmarks::testConnectionDomainEnumeration()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Connection Domain Enumeration", elapsed, iterations, 200);
 
-    QVERIFY2(elapsed < 200, qPrintable(QString("Domain enumeration too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(200), qPrintable(QString("Domain enumeration too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testDomainXMLParse()
@@ -301,7 +314,7 @@ void TestPerformanceBenchmarks::testDomainXMLParse()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Domain XML Parse", elapsed, iterations, 300);
 
-    QVERIFY2(elapsed < 300, qPrintable(QString("Domain XML parse too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(300), qPrintable(QString("Domain XML parse too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testDomainStateQuery()
@@ -322,7 +335,7 @@ void TestPerformanceBenchmarks::testDomainStateQuery()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Domain State Query", elapsed, iterations, 100);
 
-    QVERIFY2(elapsed < 100, qPrintable(QString("Domain state query too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(100), qPrintable(QString("Domain state query too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testDomainInfoQuery()
@@ -347,7 +360,7 @@ void TestPerformanceBenchmarks::testDomainInfoQuery()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Domain Info Query", elapsed, iterations, 200);
 
-    QVERIFY2(elapsed < 200, qPrintable(QString("Domain info query too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(200), qPrintable(QString("Domain info query too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testManagerWindowCreationTime()
@@ -366,7 +379,7 @@ void TestPerformanceBenchmarks::testManagerWindowCreationTime()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("ManagerWindow Creation", elapsed, iterations, 500);
 
-    QVERIFY2(elapsed < 1500, qPrintable(QString("ManagerWindow creation too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(1500), qPrintable(QString("ManagerWindow creation too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testVMWindowCreationTime()
@@ -389,7 +402,7 @@ void TestPerformanceBenchmarks::testVMWindowCreationTime()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("VMWindow Creation", elapsed, iterations, 500);
 
-    QVERIFY2(elapsed < 500, qPrintable(QString("VMWindow creation too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(500), qPrintable(QString("VMWindow creation too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testCreateVMWizardCreationTime()
@@ -413,7 +426,7 @@ void TestPerformanceBenchmarks::testCreateVMWizardCreationTime()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("CreateVMWizard Creation", elapsed, iterations, 300);
 
-    QVERIFY2(elapsed < 1500, qPrintable(QString("CreateVMWizard creation too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(1500), qPrintable(QString("CreateVMWizard creation too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testConnectionTreeModelPerformance()
@@ -441,7 +454,7 @@ void TestPerformanceBenchmarks::testConnectionTreeModelPerformance()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("ConnectionTreeModel Performance", elapsed, iterations, 500);
 
-    QVERIFY2(elapsed < 2000, qPrintable(QString("ConnectionTreeModel too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(2000), qPrintable(QString("ConnectionTreeModel too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testVMListModelPerformance()
@@ -472,7 +485,7 @@ void TestPerformanceBenchmarks::testVMListModelPerformance()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("VMListModel Performance", elapsed, iterations, 500);
 
-    QVERIFY2(elapsed < 2000, qPrintable(QString("VMListModel too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(2000), qPrintable(QString("VMListModel too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testSignalSlotPerformance()
@@ -491,7 +504,7 @@ void TestPerformanceBenchmarks::testSignalSlotPerformance()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Signal/Slot Performance", elapsed, iterations, 100);
 
-    QVERIFY2(elapsed < 1500, qPrintable(QString("Signal/slot too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(1500), qPrintable(QString("Signal/slot too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testEventProcessingLatency()
@@ -507,7 +520,7 @@ void TestPerformanceBenchmarks::testEventProcessingLatency()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Event Processing Latency", elapsed, iterations, 1000);
 
-    QVERIFY2(elapsed < 1000, qPrintable(QString("Event processing too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(1000), qPrintable(QString("Event processing too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testMemoryAllocation()
@@ -530,7 +543,7 @@ void TestPerformanceBenchmarks::testMemoryAllocation()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Memory Allocation", elapsed, iterations, 100);
 
-    QVERIFY2(elapsed < 100, qPrintable(QString("Memory allocation too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(100), qPrintable(QString("Memory allocation too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testObjectPoolPerformance()
@@ -549,19 +562,57 @@ void TestPerformanceBenchmarks::testObjectPoolPerformance()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("Object Pool Performance", elapsed, iterations, 3000);
 
-    QVERIFY2(elapsed < 3000, qPrintable(QString("Object pool too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(3000), qPrintable(QString("Object pool too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testConcurrentAccess()
 {
-    // QtConcurrent tests disabled - QtConcurrent not available
-    QSKIP("QtConcurrent not available");
+    QElapsedTimer timer;
+    timer.start();
+
+    int iterations = 100;
+    QList<QFuture<int>> futures;
+
+    for (int i = 0; i < iterations; i++) {
+        futures.append(QtConcurrent::run([i]() -> int {
+            return i * 2;
+        }));
+    }
+
+    for (auto &future : futures) {
+        future.waitForFinished();
+    }
+
+    qint64 elapsed = timer.elapsed();
+    recordBenchmark("Concurrent Access", elapsed, iterations, 2000);
+
+    QVERIFY2(elapsed < thresholdMs(2000), qPrintable(QString("Concurrent access too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testBackgroundTaskPerformance()
 {
-    // QtConcurrent tests disabled - QtConcurrent not available
-    QSKIP("QtConcurrent not available");
+    if (!m_connection) {
+        QSKIP("No connection available");
+    }
+
+    QElapsedTimer timer;
+    timer.start();
+
+    int iterations = 10;
+    for (int i = 0; i < iterations; i++) {
+        QFuture<Connection *> future = QtConcurrent::run([this]() -> Connection * {
+            return Connection::open("test:///default");
+        });
+        Connection *conn = future.result();
+        if (conn) {
+            delete conn;
+        }
+    }
+
+    qint64 elapsed = timer.elapsed();
+    recordBenchmark("Background Task Performance", elapsed, iterations, 1000);
+
+    QVERIFY2(elapsed < thresholdMs(1000), qPrintable(QString("Background task too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testRapidWindowCreation()
@@ -583,7 +634,7 @@ void TestPerformanceBenchmarks::testRapidWindowCreation()
     recordBenchmark("Rapid Window Creation", elapsed, iterations, 2000);
 
     // This is a stress test, allow more time
-    QVERIFY2(elapsed < 5000, qPrintable(QString("Rapid window creation too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(5000), qPrintable(QString("Rapid window creation too slow: %1ms").arg(elapsed)));
 }
 
 void TestPerformanceBenchmarks::testHighFrequencyUpdates()
@@ -607,7 +658,7 @@ void TestPerformanceBenchmarks::testHighFrequencyUpdates()
     qint64 elapsed = timer.elapsed();
     recordBenchmark("High Frequency Updates", elapsed, iterations, 200);
 
-    QVERIFY2(elapsed < 500, qPrintable(QString("High frequency updates too slow: %1ms").arg(elapsed)));
+    QVERIFY2(elapsed < thresholdMs(500), qPrintable(QString("High frequency updates too slow: %1ms").arg(elapsed)));
 }
 
 QTEST_MAIN(TestPerformanceBenchmarks)

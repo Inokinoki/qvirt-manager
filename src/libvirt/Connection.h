@@ -16,8 +16,7 @@
 #include <QString>
 #include <QList>
 #include <QMap>
-#include <QThread>
-#include "ConnectionWorker.h"
+#include <QMutex>
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
@@ -189,20 +188,15 @@ signals:
      // Refresh cached objects (domains, networks, storage pools)
      void refresh();
 
- private slots:
-     void onTickFinished(const PollResult &result);
-     void onConnectionLost();
-
  private:
-    Connection(const QString &uri);
-    Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
-    Connection(const QString &uri, bool /* internal */);  // Internal constructor, no connection attempt
+     Connection(const QString &uri);
+     Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
+     Connection(const QString &uri, bool /* internal */);  // Internal constructor, no connection attempt
      void initAllResources();
      void pollDomains();
      void pollNetworks();
      void pollStoragePools();
      void pollNodeDevices();
-     void startWorker();
 
      // Make m_conn accessible to Domain for XML operations
      friend class Domain;
@@ -216,9 +210,7 @@ signals:
      bool m_initialPoll;
      bool m_pollingEnabled;
 
-     QThread *m_workerThread;
-     ConnectionWorker *m_worker;
-     bool m_workerBusy;
+     mutable QMutex m_connMutex;
 
     // SSH credentials (for persistence)
     QString m_sshKeyPath;

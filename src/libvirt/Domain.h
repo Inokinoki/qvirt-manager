@@ -16,6 +16,7 @@
 #include <QString>
 #include <QPixmap>
 #include <QList>
+#include <QMutex>
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>

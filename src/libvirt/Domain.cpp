@@ -718,84 +718,96 @@ void Domain::updateInfoAsync(bool fetchXml)
         return;
     }
 
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
-    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
-        bool success = watcher->result();
-        if (success) {
+    struct DomainUpdateResult {
+        bool success;
+        int state;
+        quint64 maxMemory;
+        quint64 currentMemory;
+        int vcpuCount;
+        quint64 cpuTime;
+        int maxVcpuCount;
+        QString description;
+        QString title;
+        bool xmlFetched;
+    };
+
+    auto *watcher = new QFutureWatcher<DomainUpdateResult>(this);
+    connect(watcher, &QFutureWatcher<DomainUpdateResult>::finished, this, [this, watcher]() {
+        DomainUpdateResult r = watcher->result();
+        if (r.success) {
+            State newState = static_cast<State>(r.state);
+            if (newState != m_state) {
+                setState(newState);
+            }
+            m_maxMemory = r.maxMemory;
+            m_currentMemory = r.currentMemory;
+            m_vcpuCount = r.vcpuCount;
+            m_cpuTime = r.cpuTime;
+            m_maxVcpuCount = r.maxVcpuCount;
+            if (r.xmlFetched) {
+                m_description = r.description;
+                m_title = r.title;
+                m_xmlFetched = true;
+            }
             emit infoUpdated();
+            emit statsUpdated();
         } else {
             emit infoUpdateFailed();
         }
         watcher->deleteLater();
     });
-    connect(watcher, &QFutureWatcher<bool>::canceled, this, [this, watcher]() {
+    connect(watcher, &QFutureWatcher<DomainUpdateResult>::canceled, this, [this, watcher]() {
         emit infoUpdateFailed();
         watcher->deleteLater();
     });
 
-    QFuture<bool> future = QtConcurrent::run([this, fetchXml]() -> bool {
+    QFuture<DomainUpdateResult> future = QtConcurrent::run([this, fetchXml]() -> DomainUpdateResult {
+        DomainUpdateResult r{false, 0, 0, 0, 0, 0, 0, QString(), QString(), false};
         if (!m_domain) {
-            return false;
+            return r;
         }
 
-        // Get domain info
         virDomainInfo info;
         int ret = virDomainGetInfo(m_domain, &info);
         if (ret < 0) {
-            return false;
+            return r;
         }
 
-        // Update state
-        State newState = static_cast<State>(info.state);
-        if (newState != m_state) {
-            setState(newState);
-        }
+        r.success = true;
+        r.state = info.state;
+        r.maxMemory = info.maxMem;
+        r.currentMemory = info.memory;
+        r.vcpuCount = info.nrVirtCpu;
+        r.cpuTime = info.cpuTime;
 
-        // Update cached values
-        m_maxMemory = info.maxMem;
-        m_currentMemory = info.memory;
-        m_vcpuCount = info.nrVirtCpu;
-        m_cpuTime = info.cpuTime;
-
-        // Get max vcpu count
         int maxVcpu = virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
-        if (maxVcpu > 0) {
-            m_maxVcpuCount = maxVcpu;
-        } else {
-            m_maxVcpuCount = m_vcpuCount;
-        }
+        r.maxVcpuCount = maxVcpu > 0 ? maxVcpu : r.vcpuCount;
 
-        // Optionally fetch XML description
         if (fetchXml && !m_xmlFetched) {
             char *xml = virDomainGetXMLDesc(m_domain, 0);
             if (xml) {
                 QString xmlStr = QString::fromUtf8(xml);
                 free(xml);
 
-                // Parse description and title from XML
                 QDomDocument doc;
                 if (doc.setContent(xmlStr)) {
                     QDomElement root = doc.documentElement();
                     if (root.tagName() == "domain") {
-                        // Parse description
                         QDomNodeList descNodes = root.elementsByTagName("description");
                         if (!descNodes.isEmpty()) {
-                            m_description = descNodes.at(0).toElement().text();
+                            r.description = descNodes.at(0).toElement().text();
                         }
-
-                        // Parse title
                         QDomNodeList titleNodes = root.elementsByTagName("title");
                         if (!titleNodes.isEmpty()) {
-                            m_title = titleNodes.at(0).toElement().text();
+                            r.title = titleNodes.at(0).toElement().text();
                         }
                     }
                 }
-                m_xmlFetched = true;
+                r.xmlFetched = true;
             }
         }
 
-        emit statsUpdated();
-        return true;
+        return r;
     });
 
     watcher->setFuture(future);

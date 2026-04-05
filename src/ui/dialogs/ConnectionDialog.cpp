@@ -13,6 +13,8 @@
 #include "../../core/Config.h"
 #include <QDebug>
 #include <QDir>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -304,33 +306,50 @@ void ConnectionDialog::testConnection()
         return;
     }
 
-    // Show testing dialog
-    QMessageBox testMsg(this);
-    testMsg.setWindowTitle(tr("Test Connection"));
-    testMsg.setText(tr("Testing connection to %1...").arg(testUri));
-    testMsg.setStandardButtons(QMessageBox::NoButton);
-    testMsg.show();
+    m_testConnectionBtn->setEnabled(false);
+    m_testConnectionBtn->setText(tr("Testing..."));
 
-    // Process events to show the dialog
-    QCoreApplication::processEvents();
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher, testUri]() {
+        m_testConnectionBtn->setEnabled(true);
+        m_testConnectionBtn->setText(tr("Test Connection"));
 
-    bool success = testConnection(testUri);
+        bool success = watcher->result();
+        if (success) {
+            QMessageBox::information(this, tr("Test Connection"),
+                tr("Successfully connected to %1").arg(testUri));
+        } else {
+            QMessageBox::critical(this, tr("Test Connection"),
+                tr("Failed to connect to %1\n\n"
+                   "Possible reasons:\n"
+                   "- Host is unreachable\n"
+                   "- libvirt is not running on remote host\n"
+                   "- SSH authentication failed\n"
+                   "- Firewall is blocking the connection\n"
+                   "- Username or password is incorrect").arg(testUri));
+        }
+        watcher->deleteLater();
+    });
 
-    testMsg.hide();
+    QFuture<bool> future = QtConcurrent::run([testUri]() -> bool {
+#ifdef LIBVIRT_FOUND
+        virConnectPtr conn = virConnectOpenAuth(
+            testUri.toUtf8().constData(),
+            nullptr,
+            0
+        );
 
-    if (success) {
-        QMessageBox::information(this, tr("Test Connection"),
-            tr("Successfully connected to %1").arg(testUri));
-    } else {
-        QMessageBox::critical(this, tr("Test Connection"),
-            tr("Failed to connect to %1\n\n"
-               "Possible reasons:\n"
-               "- Host is unreachable\n"
-               "- libvirt is not running on remote host\n"
-               "- SSH authentication failed\n"
-               "- Firewall is blocking the connection\n"
-               "- Username or password is incorrect").arg(testUri));
-    }
+        if (conn) {
+            virConnectClose(conn);
+            return true;
+        }
+        return false;
+#else
+        Q_UNUSED(testUri);
+        return true;
+#endif
+    });
+    watcher->setFuture(future);
 }
 
 bool ConnectionDialog::testConnection(const QString &testUri)

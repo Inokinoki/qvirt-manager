@@ -16,6 +16,7 @@
 #include <QString>
 #include <QList>
 #include <QMap>
+#include <QMutex>
 
 #ifdef LIBVIRT_FOUND
 #include <libvirt/libvirt.h>
@@ -188,26 +189,29 @@ signals:
      void refresh();
 
  private:
-    Connection(const QString &uri);
-    Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
-    Connection(const QString &uri, bool /* internal */);  // Internal constructor, no connection attempt
-    void initAllResources();
-    void pollDomains();
-    void pollNetworks();
-    void pollStoragePools();
-    void pollNodeDevices();
+     Connection(const QString &uri);
+     Connection(const QString &uri, const QString &sshKeyPath, const QString &password);
+     Connection(const QString &uri, bool /* internal */);  // Internal constructor, no connection attempt
+     void initAllResources();
+     void pollDomains();
+     void pollNetworks();
+     void pollStoragePools();
+     void pollNodeDevices();
 
-    // Make m_conn accessible to Domain for XML operations
-    friend class Domain;
+     // Make m_conn accessible to Domain for XML operations
+     friend class Domain;
 
-    QString m_uri;
-    State m_state;
+     QString m_uri;
+     State m_state;
 
-    virConnectPtr m_conn;  // libvirt connection pointer
+     virConnectPtr m_conn;
 
-    int m_tickCounter;
-    bool m_initialPoll;
-    bool m_pollingEnabled;
+     int m_tickCounter;
+     bool m_initialPoll;
+     bool m_pollingEnabled;
+     bool m_tickBusy;
+
+     mutable QMutex m_connMutex;
 
     // SSH credentials (for persistence)
     QString m_sshKeyPath;

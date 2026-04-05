@@ -15,8 +15,12 @@
 #include <QDebug>
 #include <QFont>
 #include <QColor>
+#include <QDebug>
+#include <QFont>
+#include <QColor>
 #include <QApplication>
 #include <QStyle>
+
 
 namespace QVirt {
 
@@ -348,17 +352,9 @@ void ConnectionTreeModel::addConnection(Connection *conn)
 
         // Update cached VMs with live data - only if connection is active
         if (conn->state() == Connection::Active) {
-            // Refresh connection to get live domain data from libvirt
-            // IMPORTANT: Do this BEFORE connecting domainAdded/domainRemoved signals
-            // to avoid race condition where signals are emitted during refresh
-            conn->refresh();
-
-            QList<Domain *> liveDomains = conn->domains();
             QModelIndex connIndex = index(existingItem->row(), 0, QModelIndex());
 
-            // If connection is active but has no domains yet AND tree has no children,
-            // load cached VMs to show something while live data loads
-            if (liveDomains.isEmpty() && existingItem->children().isEmpty()) {
+            if (existingItem->children().isEmpty()) {
                 conn->loadVMCache();
                 QList<Domain *> cachedDomains = conn->domains();
 
@@ -370,7 +366,6 @@ void ConnectionTreeModel::addConnection(Connection *conn)
                         vmItem->setDomain(domain);
                         existingItem->addChild(vmItem);
 
-                        // Connect to domain signals (for when connection is refreshed)
                         connect(domain, &Domain::stateChanged,
                                 this, &ConnectionTreeModel::onDomainStateChanged);
                     }
@@ -379,79 +374,14 @@ void ConnectionTreeModel::addConnection(Connection *conn)
                 }
             }
 
-            // Build a map of live domains by UUID for quick lookup
-            QMap<QString, Domain*> liveDomainMap;
-            for (Domain *domain : liveDomains) {
-                liveDomainMap[domain->uuid()] = domain;
-            }
-
-            // If live data is empty after refresh(), libvirt returned no domains
-            // Keep tree as-is (items will be updated when domains are added via signals)
-            if (liveDomainMap.isEmpty()) {
-                // Still need to connect signals for future domain additions
-                connect(conn, &Connection::domainAdded,
-                        this, &ConnectionTreeModel::onDomainAdded);
-                connect(conn, &Connection::domainRemoved,
-                        this, &ConnectionTreeModel::onDomainRemoved);
-                return;
-            }
-
-            // Update or rebuild tree with live VMs
-            // First, remove items for VMs that no longer exist
-            QList<TreeItem*> currentItems = existingItem->children();
-            for (int i = currentItems.size() - 1; i >= 0; i--) {
-                TreeItem *vmItem = currentItems.at(i);
-                if (vmItem->type() == TreeItem::VMItem) {
-                    // Check if this VM exists in live data by name
-                    bool found = false;
-                    for (auto it = liveDomainMap.begin(); it != liveDomainMap.end(); ) {
-                        Domain *liveDomain = it.value();
-                        if (vmItem->displayName() == liveDomain->name()) {
-                            found = true;
-                            // Update tree item with live domain
-                            vmItem->setDomain(liveDomain);
-                            connect(liveDomain, &Domain::stateChanged,
-                                    this, &ConnectionTreeModel::onDomainStateChanged);
-                            liveDomainMap.erase(it);  // Remove from map
-                            break;
-                        } else {
-                            ++it;
-                        }
-                    }
-                    if (!found) {
-                        // VM no longer exists - remove from tree
-                        beginRemoveRows(connIndex, vmItem->row(), vmItem->row());
-                        existingItem->removeChild(vmItem);
-                        delete vmItem;
-                        endRemoveRows();
-                    }
-                }
-            }
-
-            // Add new VMs that weren't in cache
-            if (!liveDomainMap.isEmpty()) {
-                int insertRow = existingItem->children().count();
-                beginInsertRows(connIndex, insertRow, insertRow + liveDomainMap.count() - 1);
-
-                for (Domain *domain : liveDomainMap) {
-                    TreeItem *vmItem = new TreeItem(TreeItem::VMItem, domain->name(), existingItem);
-                    vmItem->setDomain(domain);
-                    existingItem->addChild(vmItem);
-
-                    // Connect to domain signals
-                    connect(domain, &Domain::stateChanged,
-                            this, &ConnectionTreeModel::onDomainStateChanged);
-                }
-
-                endInsertRows();
-            }
-
-            // NOW connect domainAdded/domainRemoved signals after initial population
-            // These signals will handle future domain changes (hotplug, etc.)
             connect(conn, &Connection::domainAdded,
                     this, &ConnectionTreeModel::onDomainAdded);
             connect(conn, &Connection::domainRemoved,
                     this, &ConnectionTreeModel::onDomainRemoved);
+
+            conn->refresh();
+
+            return;
         } else {
             // Connection is not active (failed/disconnected) - add cached VMs to the tree
             // The cached VMs are already in conn->domains() from loadVMCache()

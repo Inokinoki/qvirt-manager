@@ -31,11 +31,13 @@ Domain::Domain(Connection *conn, virDomainPtr domain)
     , m_maxMemory(0)
     , m_currentMemory(0)
     , m_vcpuCount(0)
-    , m_maxVcpuCount(0)
     , m_cpuTime(0)
     , m_prevCpuTime(0)
     , m_prevCpuTimestamp(0)
     , m_cachedCpuUsage(0.0f)
+    , m_cachedDiskUsage(0.0f)
+    , m_cachedNetworkUsage(0.0f)
+    , m_maxVcpuCount(0)
     , m_xmlFetched(false)
 {
     // Only call libvirt functions if we have a valid virDomainPtr
@@ -153,28 +155,73 @@ void Domain::updateInfoMinimal()
         return;
     }
 
-    // Get domain info only - no XML
     virDomainInfo info;
     int ret = virDomainGetInfo(m_domain, &info);
     if (ret < 0) {
-        qWarning() << "Failed to get domain info for" << m_name << "- domain may be inaccessible";
         return;
     }
 
-    // Update state
     State newState = static_cast<State>(info.state);
     if (newState != m_state) {
         setState(newState);
     }
 
-    // Update cached values
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    if (m_prevCpuTimestamp > 0 && currentTime > m_prevCpuTimestamp && info.nrVirtCpu > 0) {
+        quint64 cpuTimeDelta = info.cpuTime - m_prevCpuTime;
+        qint64 timeDelta = currentTime - m_prevCpuTimestamp;
+        if (timeDelta > 100) {
+            float usage = (static_cast<float>(cpuTimeDelta) / 1000000.0f) /
+                          static_cast<float>(timeDelta) / info.nrVirtCpu * 100.0f;
+            float maxUsage = info.nrVirtCpu * 100.0f;
+            if (usage < 0.0f) usage = 0.0f;
+            if (usage > maxUsage) usage = maxUsage;
+            m_cachedCpuUsage = usage;
+        }
+    }
+
+    m_prevCpuTime = info.cpuTime;
+    m_prevCpuTimestamp = currentTime;
+
     m_maxMemory = info.maxMem;
     m_currentMemory = info.memory;
     m_vcpuCount = info.nrVirtCpu;
     m_cpuTime = info.cpuTime;
-
-    // Skip vcpu flags and XML - these are expensive
     m_maxVcpuCount = m_vcpuCount;
+
+    emit statsUpdated();
+}
+
+void Domain::applyStats(int state, quint64 maxMemory, quint64 currentMemory,
+                        int vcpuCount, quint64 cpuTime)
+{
+    State newState = static_cast<State>(state);
+    if (newState != m_state) {
+        setState(newState);
+    }
+
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    if (m_prevCpuTimestamp > 0 && currentTime > m_prevCpuTimestamp && vcpuCount > 0) {
+        quint64 cpuTimeDelta = cpuTime - m_prevCpuTime;
+        qint64 timeDelta = currentTime - m_prevCpuTimestamp;
+        if (timeDelta > 100) {
+            float usage = (static_cast<float>(cpuTimeDelta) / 1000000.0f) /
+                          static_cast<float>(timeDelta) / vcpuCount * 100.0f;
+            float maxUsage = vcpuCount * 100.0f;
+            if (usage < 0.0f) usage = 0.0f;
+            if (usage > maxUsage) usage = maxUsage;
+            m_cachedCpuUsage = usage;
+        }
+    }
+
+    m_prevCpuTime = cpuTime;
+    m_prevCpuTimestamp = currentTime;
+
+    m_maxMemory = maxMemory;
+    m_currentMemory = currentMemory;
+    m_vcpuCount = vcpuCount;
+    m_cpuTime = cpuTime;
+    m_maxVcpuCount = vcpuCount;
 
     emit statsUpdated();
 }
@@ -199,7 +246,7 @@ bool Domain::start()
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -220,7 +267,7 @@ bool Domain::shutdown()
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -266,7 +313,7 @@ bool Domain::destroy()
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -282,7 +329,7 @@ bool Domain::save(const QString &path)
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -386,245 +433,6 @@ bool Domain::updateDevice(const QString &xml)
 
     emit configChanged();
     return true;
-}
-
-quint64 Domain::maxMemory() const
-{
-    return m_maxMemory;
-}
-
-quint64 Domain::memory() const
-{
-    if (!m_domain) {
-        return 0;
-    }
-
-    virDomainInfo info;
-    if (virDomainGetInfo(m_domain, &info) < 0) {
-        return 0;
-    }
-
-    return info.memory;
-}
-
-int Domain::vcpuCount() const
-{
-    return m_vcpuCount;
-}
-
-int Domain::maxVcpuCount() const
-{
-    if (!m_domain) {
-        return m_maxVcpuCount;
-    }
-
-    int maxVcpu = virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
-    return maxVcpu > 0 ? maxVcpu : m_vcpuCount;
-}
-
-quint64 Domain::cpuTime() const
-{
-    return m_cpuTime;
-}
-
-float Domain::cpuUsage()
-{
-    // Calculate CPU usage percentage based on delta over time
-    if (!m_domain || m_state != StateRunning) {
-        m_cachedCpuUsage = 0.0f;
-        return m_cachedCpuUsage;
-    }
-
-    virDomainInfo info;
-    if (virDomainGetInfo(m_domain, &info) < 0) {
-        return m_cachedCpuUsage;
-    }
-
-    // Get current CPU time (in nanoseconds)
-    quint64 currentCpuTime = info.cpuTime;
-    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
-
-    // If this is the first call, just store the values
-    if (m_prevCpuTimestamp == 0) {
-        m_prevCpuTime = currentCpuTime;
-        m_prevCpuTimestamp = currentTime;
-        m_cachedCpuUsage = 0.0f;
-        return m_cachedCpuUsage;
-    }
-
-    // Calculate delta
-    quint64 cpuTimeDelta = currentCpuTime - m_prevCpuTime;
-    qint64 timeDelta = currentTime - m_prevCpuTimestamp;
-
-    // Only update if enough time has passed (at least 100ms)
-    if (timeDelta > 100) {
-        // Calculate percentage
-        // cpuTimeDelta is in nanoseconds, timeDelta is in milliseconds
-        // Convert to percentage: (cpuTimeDelta / (timeDelta * 1000000)) / vcpuCount * 100
-        float usage = 0.0f;
-        if (m_vcpuCount > 0) {
-            usage = (static_cast<float>(cpuTimeDelta) / 1000000.0f) / static_cast<float>(timeDelta) / m_vcpuCount * 100.0f;
-        }
-
-        // Clamp to reasonable range (0-100% per vCPU, so up to vcpuCount * 100)
-        float maxUsage = m_vcpuCount * 100.0f;
-        if (usage < 0.0f) usage = 0.0f;
-        if (usage > maxUsage) usage = maxUsage;
-
-        m_cachedCpuUsage = usage;
-
-        // Store current values for next calculation
-        m_prevCpuTime = currentCpuTime;
-        m_prevCpuTimestamp = currentTime;
-    }
-
-    return m_cachedCpuUsage;
-}
-
-quint64 Domain::currentMemory() const
-{
-    if (!m_domain) {
-        return m_currentMemory;
-    }
-
-    virDomainInfo info;
-    if (virDomainGetInfo(m_domain, &info) < 0) {
-        return m_currentMemory;
-    }
-
-    return info.memory;
-}
-
-float Domain::diskUsage() const
-{
-    if (!m_domain) {
-        return 0.0f;
-    }
-
-    // Get domain XML to find disk devices (uses cached XML if available)
-    QString xmlStr = getXMLDesc(0);
-    if (xmlStr.isEmpty()) {
-        return 0.0f;
-    }
-
-    QDomDocument doc;
-    if (!doc.setContent(xmlStr)) {
-        return 0.0f;
-    }
-
-    QDomElement root = doc.documentElement();
-    if (root.tagName() != "domain") {
-        return 0.0f;
-    }
-
-    // Find all disk devices
-    long long totalBytes = 0;
-    QDomNodeList diskNodes = root.elementsByTagName("disk");
-
-    for (int i = 0; i < diskNodes.count(); i++) {
-        QDomElement diskElem = diskNodes.at(i).toElement();
-        QString diskType = diskElem.attribute("type");
-
-        // Only get stats for file and block devices
-        if (diskType != "file" && diskType != "block") {
-            continue;
-        }
-
-        // Get the target device name (e.g., "vda", "sda")
-        QDomNodeList targetNodes = diskElem.elementsByTagName("target");
-        if (targetNodes.isEmpty()) {
-            continue;
-        }
-
-        QDomElement targetElem = targetNodes.at(0).toElement();
-        QString targetDev = targetElem.attribute("dev");
-        if (targetDev.isEmpty()) {
-            continue;
-        }
-
-        // Query block stats for this disk
-        virDomainBlockStatsStruct stats;
-        memset(&stats, 0, sizeof(stats));
-
-        if (virDomainBlockStats(m_domain, targetDev.toUtf8().constData(),
-                                &stats, sizeof(stats)) < 0) {
-            continue;
-        }
-
-        // Accumulate read and write bytes
-        if (stats.rd_bytes > 0) {
-            totalBytes += stats.rd_bytes;
-        }
-        if (stats.wr_bytes > 0) {
-            totalBytes += stats.wr_bytes;
-        }
-    }
-
-    // Return usage in MB
-    return static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
-}
-
-float Domain::networkUsage() const
-{
-    if (!m_domain) {
-        return 0.0f;
-    }
-
-    // Get domain XML to find network interfaces (uses cached XML if available)
-    QString xmlStr = getXMLDesc(0);
-    if (xmlStr.isEmpty()) {
-        return 0.0f;
-    }
-
-    QDomDocument doc;
-    if (!doc.setContent(xmlStr)) {
-        return 0.0f;
-    }
-
-    QDomElement root = doc.documentElement();
-    if (root.tagName() != "domain") {
-        return 0.0f;
-    }
-
-    // Find all network interface devices
-    long long totalBytes = 0;
-    QDomNodeList interfaceNodes = root.elementsByTagName("interface");
-
-    for (int i = 0; i < interfaceNodes.count(); i++) {
-        QDomElement interfaceElem = interfaceNodes.at(i).toElement();
-
-        // Get the target device name (e.g., "vnet0")
-        QDomNodeList targetNodes = interfaceElem.elementsByTagName("target");
-        if (targetNodes.isEmpty()) {
-            continue;
-        }
-
-        QDomElement targetElem = targetNodes.at(0).toElement();
-        QString targetDev = targetElem.attribute("dev");
-        if (targetDev.isEmpty()) {
-            continue;
-        }
-
-        // Query interface stats for this network device
-        virDomainInterfaceStatsStruct stats;
-        memset(&stats, 0, sizeof(stats));
-
-        if (virDomainInterfaceStats(m_domain, targetDev.toUtf8().constData(),
-                                    &stats, sizeof(stats)) < 0) {
-            continue;
-        }
-
-        // Accumulate RX and TX bytes
-        if (stats.rx_bytes > 0) {
-            totalBytes += stats.rx_bytes;
-        }
-        if (stats.tx_bytes > 0) {
-            totalBytes += stats.tx_bytes;
-        }
-    }
-
-    // Return usage in MB
-    return static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
 }
 
 QList<DomainSnapshot*> Domain::snapshots() const
@@ -910,86 +718,187 @@ void Domain::updateInfoAsync(bool fetchXml)
         return;
     }
 
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
-    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
-        bool success = watcher->result();
-        if (success) {
+    struct DomainUpdateResult {
+        bool success;
+        int state;
+        quint64 maxMemory;
+        quint64 currentMemory;
+        int vcpuCount;
+        quint64 cpuTime;
+        int maxVcpuCount;
+        QString description;
+        QString title;
+        bool xmlFetched;
+    };
+
+    auto *watcher = new QFutureWatcher<DomainUpdateResult>(this);
+    connect(watcher, &QFutureWatcher<DomainUpdateResult>::finished, this, [this, watcher]() {
+        DomainUpdateResult r = watcher->result();
+        if (r.success) {
+            State newState = static_cast<State>(r.state);
+            if (newState != m_state) {
+                setState(newState);
+            }
+            m_maxMemory = r.maxMemory;
+            m_currentMemory = r.currentMemory;
+            m_vcpuCount = r.vcpuCount;
+            m_cpuTime = r.cpuTime;
+            m_maxVcpuCount = r.maxVcpuCount;
+            if (r.xmlFetched) {
+                m_description = r.description;
+                m_title = r.title;
+                m_xmlFetched = true;
+            }
             emit infoUpdated();
+            emit statsUpdated();
         } else {
             emit infoUpdateFailed();
         }
         watcher->deleteLater();
     });
-    connect(watcher, &QFutureWatcher<bool>::canceled, this, [this, watcher]() {
+    connect(watcher, &QFutureWatcher<DomainUpdateResult>::canceled, this, [this, watcher]() {
         emit infoUpdateFailed();
         watcher->deleteLater();
     });
 
-    QFuture<bool> future = QtConcurrent::run([this, fetchXml]() -> bool {
+    QFuture<DomainUpdateResult> future = QtConcurrent::run([this, fetchXml]() -> DomainUpdateResult {
+        DomainUpdateResult r{false, 0, 0, 0, 0, 0, 0, QString(), QString(), false};
         if (!m_domain) {
-            return false;
+            return r;
         }
 
-        // Get domain info
         virDomainInfo info;
         int ret = virDomainGetInfo(m_domain, &info);
         if (ret < 0) {
-            return false;
+            return r;
         }
 
-        // Update state
-        State newState = static_cast<State>(info.state);
-        if (newState != m_state) {
-            setState(newState);
-        }
+        r.success = true;
+        r.state = info.state;
+        r.maxMemory = info.maxMem;
+        r.currentMemory = info.memory;
+        r.vcpuCount = info.nrVirtCpu;
+        r.cpuTime = info.cpuTime;
 
-        // Update cached values
-        m_maxMemory = info.maxMem;
-        m_currentMemory = info.memory;
-        m_vcpuCount = info.nrVirtCpu;
-        m_cpuTime = info.cpuTime;
-
-        // Get max vcpu count
         int maxVcpu = virDomainGetVcpusFlags(m_domain, VIR_DOMAIN_AFFECT_CURRENT);
-        if (maxVcpu > 0) {
-            m_maxVcpuCount = maxVcpu;
-        } else {
-            m_maxVcpuCount = m_vcpuCount;
-        }
+        r.maxVcpuCount = maxVcpu > 0 ? maxVcpu : r.vcpuCount;
 
-        // Optionally fetch XML description
         if (fetchXml && !m_xmlFetched) {
             char *xml = virDomainGetXMLDesc(m_domain, 0);
             if (xml) {
                 QString xmlStr = QString::fromUtf8(xml);
                 free(xml);
 
-                // Parse description and title from XML
                 QDomDocument doc;
                 if (doc.setContent(xmlStr)) {
                     QDomElement root = doc.documentElement();
                     if (root.tagName() == "domain") {
-                        // Parse description
                         QDomNodeList descNodes = root.elementsByTagName("description");
                         if (!descNodes.isEmpty()) {
-                            m_description = descNodes.at(0).toElement().text();
+                            r.description = descNodes.at(0).toElement().text();
                         }
-
-                        // Parse title
                         QDomNodeList titleNodes = root.elementsByTagName("title");
                         if (!titleNodes.isEmpty()) {
-                            m_title = titleNodes.at(0).toElement().text();
+                            r.title = titleNodes.at(0).toElement().text();
                         }
                     }
                 }
-                m_xmlFetched = true;
+                r.xmlFetched = true;
             }
         }
 
-        emit statsUpdated();
-        return true;
+        return r;
     });
 
+    watcher->setFuture(future);
+}
+
+void Domain::startAsync()
+{
+    if (!m_domain) {
+        emit lifecycleOperationFinished("start", false);
+        return;
+    }
+
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        bool success = watcher->result();
+        if (success) {
+            setState(StateRunning);
+        }
+        emit lifecycleOperationFinished("start", success);
+        watcher->deleteLater();
+    });
+
+    QFuture<bool> future = QtConcurrent::run([this]() -> bool {
+        return virDomainCreate(m_domain) >= 0;
+    });
+    watcher->setFuture(future);
+}
+
+void Domain::shutdownAsync()
+{
+    if (!m_domain) {
+        emit lifecycleOperationFinished("shutdown", false);
+        return;
+    }
+
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        bool success = watcher->result();
+        emit lifecycleOperationFinished("shutdown", success);
+        watcher->deleteLater();
+    });
+
+    QFuture<bool> future = QtConcurrent::run([this]() -> bool {
+        return virDomainShutdown(m_domain) >= 0;
+    });
+    watcher->setFuture(future);
+}
+
+void Domain::destroyAsync()
+{
+    if (!m_domain) {
+        emit lifecycleOperationFinished("destroy", false);
+        return;
+    }
+
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        bool success = watcher->result();
+        if (success) {
+            setState(StateShutOff);
+        }
+        emit lifecycleOperationFinished("destroy", success);
+        watcher->deleteLater();
+    });
+
+    QFuture<bool> future = QtConcurrent::run([this]() -> bool {
+        return virDomainDestroy(m_domain) >= 0;
+    });
+    watcher->setFuture(future);
+}
+
+void Domain::saveAsync(const QString &path)
+{
+    if (!m_domain) {
+        emit lifecycleOperationFinished("save", false);
+        return;
+    }
+
+    auto *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        bool success = watcher->result();
+        if (success) {
+            setState(StateShutOff);
+        }
+        emit lifecycleOperationFinished("save", success);
+        watcher->deleteLater();
+    });
+
+    QFuture<bool> future = QtConcurrent::run([this, path]() -> bool {
+        return virDomainSave(m_domain, path.toUtf8().constData()) >= 0;
+    });
     watcher->setFuture(future);
 }
 

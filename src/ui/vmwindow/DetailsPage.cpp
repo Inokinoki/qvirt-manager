@@ -731,7 +731,7 @@ QDomNode DetailsPage::findDeviceNode(QDomElement &devicesElement, const QString 
 
 void DetailsPage::refresh()
 {
-    m_domain->updateInfo();
+    m_domain->updateInfoAsync();
     updateReadOnlyMode();
     populateDeviceTree();
 }

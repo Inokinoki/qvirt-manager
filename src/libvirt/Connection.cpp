@@ -78,6 +78,14 @@ static virConnectAuth authHelper = {
 
 namespace QVirt {
 
+struct DomainStats {
+    int state;
+    quint64 maxMemory;
+    quint64 currentMemory;
+    int vcpuCount;
+    quint64 cpuTime;
+};
+
 Connection::Connection(const QString &uri)
     : BaseObject()
     , m_uri(uri)
@@ -86,12 +94,10 @@ Connection::Connection(const QString &uri)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_tickBusy(false)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
-    , m_cachedHostname()
-    , m_cachedCapabilities()
-    , m_cachedLibvirtVersion()
     , m_hostnameFetched(false)
     , m_capabilitiesFetched(false)
     , m_libvirtVersionFetched(false)
@@ -118,13 +124,11 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_tickBusy(false)
     , m_sshKeyPath(sshKeyPath)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
-    , m_cachedHostname()
-    , m_cachedCapabilities()
-    , m_cachedLibvirtVersion()
     , m_hostnameFetched(false)
     , m_capabilitiesFetched(false)
     , m_libvirtVersionFetched(false)
@@ -244,12 +248,10 @@ Connection::Connection(const QString &uri, bool /* internal */)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_tickBusy(false)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
-    , m_cachedHostname()
-    , m_cachedCapabilities()
-    , m_cachedLibvirtVersion()
     , m_hostnameFetched(false)
     , m_capabilitiesFetched(false)
     , m_libvirtVersionFetched(false)
@@ -262,23 +264,25 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
     m_state = Connecting;
     emit stateChanged(m_state);
 
-    auto *watcher = new QFutureWatcher<bool>(this);
+    struct OpenResult {
+        virConnectPtr conn;
+        QString error;
+    };
 
-    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
-        bool success = watcher->result();
+    auto *watcher = new QFutureWatcher<OpenResult>(this);
 
-        if (success) {
+    connect(watcher, &QFutureWatcher<OpenResult>::finished, this, [this, watcher]() {
+        OpenResult result = watcher->result();
+
+        if (result.conn) {
+            m_conn = result.conn;
             m_state = Active;
             m_connectionError.clear();
             emit connectionProgress(tr("Connection established"));
             qDebug() << "Async connection to" << m_uri << "succeeded";
-
-            // Now open the connection and store the pointer
-#ifdef LIBVIRT_FOUND
-            m_conn = virConnectOpen(m_uri.toUtf8().constData());
-#endif
         } else {
             m_state = ConnectionFailed;
+            m_connectionError = result.error;
             if (m_connectionError.isEmpty()) {
                 m_connectionError = tr("Connection timed out or failed");
             }
@@ -289,35 +293,15 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
         watcher->deleteLater();
     });
 
-    QFuture<bool> future = QtConcurrent::run([this, sshKeyPath, password]() -> bool {
+    QFuture<OpenResult> future = QtConcurrent::run([this, sshKeyPath, password]() -> OpenResult {
+        OpenResult result{nullptr, QString()};
 #ifdef LIBVIRT_FOUND
-        virConnectPtr conn = nullptr;
-
-        // Extract hostname for status messages
-        QString hostname = m_uri;
-        if (hostname.contains("://")) {
-            hostname = hostname.split("://")[1];
-            if (hostname.contains("/")) {
-                hostname = hostname.split("/")[0];
-            }
-            if (hostname.contains("@")) {
-                hostname = hostname.split("@")[1];
-            }
-            if (hostname.contains(":")) {
-                hostname = hostname.split(":")[0];
-            }
-        }
-
         if (sshKeyPath.isEmpty() && password.isEmpty()) {
-            emit connectionProgress(tr("Connecting to %1...").arg(m_uri));
-            conn = virConnectOpen(m_uri.toUtf8().constData());
+            result.conn = virConnectOpen(m_uri.toUtf8().constData());
         } else {
             ConnectionAuthData authData;
             authData.password = password;
             authData.sshKeyPath = sshKeyPath;
-
-            // Show SSH connection status
-            emit connectionProgress(tr("Connecting via SSH to %1...").arg(hostname));
 
             QByteArray originalLibvirtSsh;
             if (!sshKeyPath.isEmpty()) {
@@ -325,12 +309,10 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
                 QString sshCmd = QString("ssh -i \"%1\" -o IdentitiesOnly=yes -o BatchMode=no -o ConnectTimeout=10")
                     .arg(sshKeyPath);
                 qputenv("LIBVIRT_SSH", sshCmd.toUtf8());
-                emit connectionProgress(tr("Authenticating with SSH key..."));
             }
 
             authHelper.cbdata = &authData;
-            emit connectionProgress(tr("Connecting to libvirt..."));
-            conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &authHelper, 0);
+            result.conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &authHelper, 0);
 
             if (!sshKeyPath.isEmpty()) {
                 if (originalLibvirtSsh.isEmpty()) {
@@ -341,21 +323,16 @@ void Connection::openAsync(const QString &sshKeyPath, const QString &password)
             }
         }
 
-        if (conn) {
-            // Store the connection pointer for later use
-            // Note: We don't close it here - it will be closed in Connection::close()
-            return true;
-        } else {
+        if (!result.conn) {
             virErrorPtr err = virGetLastError();
             if (err) {
-                m_connectionError = QString::fromUtf8(err->message);
+                result.error = QString::fromUtf8(err->message);
             }
-            return false;
         }
 #else
-        m_connectionError = tr("libvirt not available");
-        return false;
+        result.error = tr("libvirt not available");
 #endif
+        return result;
     });
 
     watcher->setFuture(future);
@@ -421,13 +398,11 @@ void Connection::refresh()
 void Connection::close()
 {
     if (!m_conn) {
-        return;  // Already closed
+        return;
     }
 
-    // Save VM cache before closing
     saveVMCache();
 
-    // Clean up cached objects
     for (auto *domain : m_domains) {
         delete domain;
     }
@@ -782,37 +757,36 @@ void Connection::tick()
         return;
     }
 
-    // Skip polling if disabled (e.g., when modal dialog is open)
     if (!m_pollingEnabled) {
+        return;
+    }
+
+    if (m_tickBusy) {
         return;
     }
 
     m_tickCounter++;
 
-    // Validate connection
-    if (virConnectIsAlive(m_conn) != 1) {
-        qDebug() << "Connection to" << m_uri << "is no longer alive";
-        close();
-        return;
+    {
+        QMutexLocker locker(&m_connMutex);
+        if (virConnectIsAlive(m_conn) != 1) {
+            locker.unlock();
+            qDebug() << "Connection to" << m_uri << "is no longer alive";
+            close();
+            return;
+        }
     }
 
-    // Initial resource loading - run only once, before any polling
     if (m_initialPoll && m_tickCounter > 1) {
         m_initialPoll = false;
+        m_tickBusy = true;
         qDebug() << "Starting initial resource loading...";
-        m_pollingEnabled = false;  // Disable polling during init
         initAllResources();
-        m_pollingEnabled = true;   // Re-enable after init
+        m_tickBusy = false;
         qDebug() << "Initial resource loading completed";
-        return;  // Skip polling on this tick
-    }
-
-    // Skip polling if disabled
-    if (!m_pollingEnabled) {
         return;
     }
 
-    // Poll for changes
     if (m_tickCounter % 2 == 0) {
         pollDomains();
     }
@@ -823,18 +797,48 @@ void Connection::tick()
         pollNodeDevices();
     }
 
-    // Update all domain stats - only if we have domains
-    if (!m_domains.isEmpty()) {
-        for (auto *domain : m_domains) {
-            if (domain) {
-                domain->updateInfoMinimal();  // Fast, no XML
-            }
-        }
-    }
+    if (m_tickCounter % 4 == 0 && !m_domains.isEmpty()) {
+        m_tickBusy = true;
 
-    // Note: Network, StoragePool, and NodeDevice updates are only done during polling
-    // when changes are detected, to avoid blocking the UI with unnecessary libvirt calls.
-    // The poll*() methods create new objects with fresh data when devices are added.
+        auto domainNames = m_domains.keys();
+        auto *watcher = new QFutureWatcher<QMap<QString, DomainStats>>(this);
+        connect(watcher, &QFutureWatcher<QMap<QString, DomainStats>>::finished, this,
+                [this, watcher]() {
+            m_tickBusy = false;
+            auto results = watcher->result();
+            for (auto it = results.constBegin(); it != results.constEnd(); ++it) {
+                Domain *domain = m_domains.value(it.key(), nullptr);
+                if (domain) {
+                    domain->applyStats(it.value().state, it.value().maxMemory,
+                                       it.value().currentMemory, it.value().vcpuCount,
+                                       it.value().cpuTime);
+                }
+            }
+            watcher->deleteLater();
+        });
+
+        QFuture<QMap<QString, DomainStats>> future = QtConcurrent::run([this, domainNames]() -> QMap<QString, DomainStats> {
+            QMap<QString, DomainStats> results;
+            QMutexLocker locker(&m_connMutex);
+            for (const QString &name : domainNames) {
+                Domain *domain = m_domains.value(name, nullptr);
+                if (domain && domain->rawDomain()) {
+                    virDomainInfo info;
+                    if (virDomainGetInfo(domain->rawDomain(), &info) == 0) {
+                        DomainStats ds;
+                        ds.state = info.state;
+                        ds.maxMemory = info.maxMem;
+                        ds.currentMemory = info.memory;
+                        ds.vcpuCount = info.nrVirtCpu;
+                        ds.cpuTime = info.cpuTime;
+                        results[name] = ds;
+                    }
+                }
+            }
+            return results;
+        });
+        watcher->setFuture(future);
+    }
 }
 
 void Connection::initAllResources()
@@ -1790,74 +1794,64 @@ void Connection::fetchHostStatsAsync()
         return;
     }
 
-    QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>> *watcher =
-        new QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>>(this);
+    struct HostStatsRaw {
+        unsigned long long totalTime;
+        unsigned long long idleTime;
+        unsigned long long memTotal;
+        unsigned long long memFree;
+    };
 
-    connect(watcher, &QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>>::finished,
-            this, [this, watcher]() {
-        auto result = watcher->result();
-        int cpuUsage = std::get<0>(result);
-        unsigned long long memTotal = std::get<1>(result);
-        unsigned long long memUsed = std::get<2>(result);
-        emit hostStatsFetched(cpuUsage, memTotal, memUsed);
+    QFutureWatcher<HostStatsRaw> *watcher = new QFutureWatcher<HostStatsRaw>(this);
+
+    connect(watcher, &QFutureWatcher<HostStatsRaw>::finished, this, [this, watcher]() {
+        HostStatsRaw raw = watcher->result();
+
+        int cpuUsage = 0;
+        if (m_lastCPUTime > 0 && raw.totalTime > m_lastCPUTime) {
+            unsigned long long totalDiff = raw.totalTime - m_lastCPUTime;
+            unsigned long long idleDiff = raw.idleTime - m_lastIdleTime;
+            if (totalDiff > 0) {
+                cpuUsage = 100 - ((idleDiff * 100) / totalDiff);
+                if (cpuUsage < 0) cpuUsage = 0;
+                if (cpuUsage > 100) cpuUsage = 100;
+            }
+        }
+        m_lastCPUTime = raw.totalTime;
+        m_lastIdleTime = raw.idleTime;
+
+        unsigned long long memUsed = raw.memTotal >= raw.memFree ? raw.memTotal - raw.memFree : 0;
+        m_lastCPUUsage = cpuUsage;
+
+        emit hostStatsFetched(cpuUsage, raw.memTotal, memUsed);
         watcher->deleteLater();
     });
-    connect(watcher, &QFutureWatcher<std::tuple<int, unsigned long long, unsigned long long>>::canceled,
-            this, [this, watcher]() {
-        emit fetchFailed(tr("Host stats fetch was canceled"));
-        watcher->deleteLater();
-    });
 
-    QFuture<std::tuple<int, unsigned long long, unsigned long long>> future =
-        QtConcurrent::run([this]() {
+    QFuture<HostStatsRaw> future =
+        QtConcurrent::run([this]() -> HostStatsRaw {
+            HostStatsRaw raw{0, 0, 0, 0};
 #ifdef LIBVIRT_FOUND
-            int cpuUsage = 0;
-            unsigned long long memTotal = 0;
-            unsigned long long memUsed = 0;
+            QMutexLocker locker(&m_connMutex);
 
-            // Get CPU stats
             int nparams = 0;
             if (virNodeGetCPUStats(m_conn, -1, nullptr, &nparams, 0) >= 0 && nparams > 0) {
                 virNodeCPUStats *params = new virNodeCPUStats[nparams];
                 memset(params, 0, sizeof(virNodeCPUStats) * nparams);
 
                 if (virNodeGetCPUStats(m_conn, -1, params, &nparams, 0) >= 0) {
-                    unsigned long long userTime = 0;
-                    unsigned long long kernelTime = 0;
-                    unsigned long long idleTime = 0;
-                    unsigned long long iowaitTime = 0;
-
                     for (int i = 0; i < nparams; i++) {
                         if (strcmp(params[i].field, "idle") == 0) {
-                            idleTime = params[i].value;
-                        } else if (strcmp(params[i].field, "user") == 0) {
-                            userTime = params[i].value;
-                        } else if (strcmp(params[i].field, "kernel") == 0) {
-                            kernelTime = params[i].value;
-                        } else if (strcmp(params[i].field, "iowait") == 0) {
-                            iowaitTime = params[i].value;
+                            raw.idleTime = params[i].value;
+                        } else if (strcmp(params[i].field, "user") == 0 ||
+                                   strcmp(params[i].field, "kernel") == 0 ||
+                                   strcmp(params[i].field, "iowait") == 0) {
+                            raw.totalTime += params[i].value;
                         }
                     }
-
-                    unsigned long long totalTime = userTime + kernelTime + idleTime + iowaitTime;
-
-                    if (m_lastCPUTime > 0 && totalTime > m_lastCPUTime) {
-                        unsigned long long totalDiff = totalTime - m_lastCPUTime;
-                        unsigned long long idleDiff = idleTime - m_lastIdleTime;
-                        if (totalDiff > 0) {
-                            cpuUsage = 100 - ((idleDiff * 100) / totalDiff);
-                            if (cpuUsage < 0) cpuUsage = 0;
-                            if (cpuUsage > 100) cpuUsage = 100;
-                        }
-                    }
-
-                    m_lastCPUTime = totalTime;
-                    m_lastIdleTime = idleTime;
+                    raw.totalTime += raw.idleTime;
                 }
                 delete[] params;
             }
 
-            // Get memory stats
             nparams = 0;
             if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, nullptr, &nparams, 0) >= 0) {
                 if (nparams > 0) {
@@ -1865,24 +1859,19 @@ void Connection::fetchHostStatsAsync()
                     if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, params, &nparams, 0) >= 0) {
                         for (int i = 0; i < nparams; i++) {
                             if (strcmp(params[i].field, "total") == 0) {
-                                memTotal = params[i].value;
+                                raw.memTotal = params[i].value;
                             } else if (strcmp(params[i].field, "free") == 0) {
-                                memUsed = params[i].value;  // Will calculate used later
+                                raw.memFree = params[i].value;
                             }
-                        }
-                        // Calculate used memory
-                        if (memTotal >= memUsed) {
-                            memUsed = memTotal - memUsed;
                         }
                     }
                     delete[] params;
                 }
             }
-
-            return std::make_tuple(cpuUsage, memTotal, memUsed);
 #else
-            return std::make_tuple(0, 0ULL, 0ULL);
+            Q_UNUSED(this);
 #endif
+            return raw;
         });
 
     watcher->setFuture(future);

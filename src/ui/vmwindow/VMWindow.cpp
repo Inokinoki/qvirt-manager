@@ -266,7 +266,7 @@ void VMWindow::updateControlButtons()
 
 void VMWindow::refresh()
 {
-    m_domain->updateInfo();
+    m_domain->updateInfoAsync();
     updateDomainState();
 }
 
@@ -288,23 +288,23 @@ void VMWindow::onDomainStatsUpdated()
 
 void VMWindow::onStartClicked()
 {
-    if (!m_domain->start()) {
-        Error::showError("Failed to start VM", m_domain->name());
-    }
+    m_actionStart->setEnabled(false);
+    m_domain->startAsync();
 }
 
 void VMWindow::onStopClicked()
 {
-    if (!m_domain->shutdown()) {
-        Error::showError("Failed to shutdown VM", m_domain->name());
-    }
+    m_actionStop->setEnabled(false);
+    m_domain->shutdownAsync();
 }
 
 void VMWindow::onRebootClicked()
 {
+    m_actionReboot->setEnabled(false);
     if (!m_domain->reboot()) {
         Error::showError("Failed to reboot VM", m_domain->name());
     }
+    m_actionReboot->setEnabled(true);
 }
 
 void VMWindow::onPauseClicked()
@@ -324,9 +324,8 @@ void VMWindow::onForceOffClicked()
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
-        if (!m_domain->destroy()) {
-            Error::showError("Failed to force off VM", m_domain->name());
-        }
+        m_actionForceOff->setEnabled(false);
+        m_domain->destroyAsync();
     }
 }
 

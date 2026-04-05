@@ -246,7 +246,7 @@ bool Domain::start()
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -267,7 +267,7 @@ bool Domain::shutdown()
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -313,7 +313,7 @@ bool Domain::destroy()
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 
@@ -329,7 +329,7 @@ bool Domain::save(const QString &path)
         return false;
     }
 
-    updateInfo();
+    updateInfoAsync();
     return true;
 }
 

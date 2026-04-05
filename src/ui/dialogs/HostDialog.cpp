@@ -452,20 +452,21 @@ void HostDialog::updatePerformance()
 
 void HostDialog::updateDevices()
 {
-    m_devicesTable->setModel(nullptr);
-
     if (!m_connection || !m_connection->isOpen()) {
+        delete m_devicesTable->model();
+        m_devicesTable->setModel(nullptr);
         return;
     }
 
-    // Get node devices
     QList<NodeDevice*> devices = m_connection->nodeDevices();
 
     if (devices.isEmpty()) {
+        delete m_devicesTable->model();
+        m_devicesTable->setModel(nullptr);
         return;
     }
 
-    // Create a simple table model
+    delete m_devicesTable->model();
     auto *model = new QStandardItemModel(this);
     model->setHorizontalHeaderLabels({"Name"});
 

@@ -10,14 +10,6 @@
  */
 
 #include "ConnectionTreeModel.h"
-#include "../../libvirt/Domain.h"
-#include "../../libvirt/EnumMapper.h"
-#include <QDebug>
-#include <QFont>
-#include <QColor>
-#include <QApplication>
-#include <QStyle>
-#include <QtConcurrent/QtConcurrent>
 
 namespace QVirt {
 
@@ -376,11 +368,7 @@ void ConnectionTreeModel::addConnection(Connection *conn)
             connect(conn, &Connection::domainRemoved,
                     this, &ConnectionTreeModel::onDomainRemoved);
 
-            // Trigger an async refresh - background worker will populate live data
-            // which emits domainAdded/domainRemoved signals to update the tree
-            QtConcurrent::run([conn]() {
-                conn->refresh();
-            });
+            conn->refresh();
 
             return;
         } else {

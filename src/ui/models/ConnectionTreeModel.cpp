@@ -10,6 +10,17 @@
  */
 
 #include "ConnectionTreeModel.h"
+#include "../../libvirt/Domain.h"
+#include "../../libvirt/EnumMapper.h"
+#include <QDebug>
+#include <QFont>
+#include <QColor>
+#include <QDebug>
+#include <QFont>
+#include <QColor>
+#include <QApplication>
+#include <QStyle>
+
 
 namespace QVirt {
 

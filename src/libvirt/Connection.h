@@ -209,6 +209,7 @@ signals:
      int m_tickCounter;
      bool m_initialPoll;
      bool m_pollingEnabled;
+     bool m_tickBusy;
 
      mutable QMutex m_connMutex;
 

@@ -421,9 +421,7 @@ void ManagerWindow::onVMStarted()
         return;
     }
 
-    if (domain->start()) {
-        m_statusLabel->setText(tr("VM '%1' started").arg(domain->name()));
-    }
+    domain->startAsync();
 }
 
 void ManagerWindow::onVMStopped()
@@ -433,9 +431,7 @@ void ManagerWindow::onVMStopped()
         return;
     }
 
-    if (domain->stop()) {
-        m_statusLabel->setText(tr("VM '%1' stopped").arg(domain->name()));
-    }
+    domain->shutdownAsync();
 }
 
 void ManagerWindow::onVMRebooted()

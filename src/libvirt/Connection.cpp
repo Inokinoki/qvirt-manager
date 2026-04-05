@@ -78,6 +78,14 @@ static virConnectAuth authHelper = {
 
 namespace QVirt {
 
+struct DomainStats {
+    int state;
+    quint64 maxMemory;
+    quint64 currentMemory;
+    int vcpuCount;
+    quint64 cpuTime;
+};
+
 Connection::Connection(const QString &uri)
     : BaseObject()
     , m_uri(uri)
@@ -86,6 +94,7 @@ Connection::Connection(const QString &uri)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_tickBusy(false)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
@@ -115,6 +124,7 @@ Connection::Connection(const QString &uri, const QString &sshKeyPath, const QStr
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_tickBusy(false)
     , m_sshKeyPath(sshKeyPath)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
@@ -238,6 +248,7 @@ Connection::Connection(const QString &uri, bool /* internal */)
     , m_tickCounter(0)
     , m_initialPoll(true)
     , m_pollingEnabled(true)
+    , m_tickBusy(false)
     , m_lastCPUTime(0)
     , m_lastIdleTime(0)
     , m_lastCPUUsage(0)
@@ -746,37 +757,36 @@ void Connection::tick()
         return;
     }
 
-    // Skip polling if disabled (e.g., when modal dialog is open)
     if (!m_pollingEnabled) {
+        return;
+    }
+
+    if (m_tickBusy) {
         return;
     }
 
     m_tickCounter++;
 
-    // Validate connection
-    if (virConnectIsAlive(m_conn) != 1) {
-        qDebug() << "Connection to" << m_uri << "is no longer alive";
-        close();
-        return;
+    {
+        QMutexLocker locker(&m_connMutex);
+        if (virConnectIsAlive(m_conn) != 1) {
+            locker.unlock();
+            qDebug() << "Connection to" << m_uri << "is no longer alive";
+            close();
+            return;
+        }
     }
 
-    // Initial resource loading - run only once, before any polling
     if (m_initialPoll && m_tickCounter > 1) {
         m_initialPoll = false;
+        m_tickBusy = true;
         qDebug() << "Starting initial resource loading...";
-        m_pollingEnabled = false;  // Disable polling during init
         initAllResources();
-        m_pollingEnabled = true;   // Re-enable after init
+        m_tickBusy = false;
         qDebug() << "Initial resource loading completed";
-        return;  // Skip polling on this tick
-    }
-
-    // Skip polling if disabled
-    if (!m_pollingEnabled) {
         return;
     }
 
-    // Poll for changes
     if (m_tickCounter % 2 == 0) {
         pollDomains();
     }
@@ -787,18 +797,48 @@ void Connection::tick()
         pollNodeDevices();
     }
 
-    // Update domain stats at reduced frequency (every 4th tick)
     if (m_tickCounter % 4 == 0 && !m_domains.isEmpty()) {
-        for (auto *domain : m_domains) {
-            if (domain) {
-                domain->updateInfoMinimal();
-            }
-        }
-    }
+        m_tickBusy = true;
 
-    // Note: Network, StoragePool, and NodeDevice updates are only done during polling
-    // when changes are detected, to avoid blocking the UI with unnecessary libvirt calls.
-    // The poll*() methods create new objects with fresh data when devices are added.
+        auto domainNames = m_domains.keys();
+        auto *watcher = new QFutureWatcher<QMap<QString, DomainStats>>(this);
+        connect(watcher, &QFutureWatcher<QMap<QString, DomainStats>>::finished, this,
+                [this, watcher]() {
+            m_tickBusy = false;
+            auto results = watcher->result();
+            for (auto it = results.constBegin(); it != results.constEnd(); ++it) {
+                Domain *domain = m_domains.value(it.key(), nullptr);
+                if (domain) {
+                    domain->applyStats(it.value().state, it.value().maxMemory,
+                                       it.value().currentMemory, it.value().vcpuCount,
+                                       it.value().cpuTime);
+                }
+            }
+            watcher->deleteLater();
+        });
+
+        QFuture<QMap<QString, DomainStats>> future = QtConcurrent::run([this, domainNames]() -> QMap<QString, DomainStats> {
+            QMap<QString, DomainStats> results;
+            QMutexLocker locker(&m_connMutex);
+            for (const QString &name : domainNames) {
+                Domain *domain = m_domains.value(name, nullptr);
+                if (domain && domain->rawDomain()) {
+                    virDomainInfo info;
+                    if (virDomainGetInfo(domain->rawDomain(), &info) == 0) {
+                        DomainStats ds;
+                        ds.state = info.state;
+                        ds.maxMemory = info.maxMem;
+                        ds.currentMemory = info.memory;
+                        ds.vcpuCount = info.nrVirtCpu;
+                        ds.cpuTime = info.cpuTime;
+                        results[name] = ds;
+                    }
+                }
+            }
+            return results;
+        });
+        watcher->setFuture(future);
+    }
 }
 
 void Connection::initAllResources()
